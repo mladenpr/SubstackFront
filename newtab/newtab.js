@@ -9,11 +9,13 @@
   const postGridEl = document.getElementById('post-grid');
   const publicationFilterEl = document.getElementById('publication-filter');
   const refreshBtnEl = document.getElementById('refresh-btn');
+  const scrollToggleEl = document.getElementById('scroll-toggle');
   const statsEl = document.getElementById('stats');
 
   // State
   let allPosts = [];
   let currentFilter = '';
+  let scrollMode = localStorage.getItem('scrollMode') === 'true';
 
   /**
    * Format relative date
@@ -111,7 +113,7 @@
   }
 
   /**
-   * Render posts to grid (limited to viewport capacity)
+   * Render posts to grid (limited to viewport capacity in fit mode)
    */
   function renderPosts(posts) {
     postGridEl.innerHTML = '';
@@ -125,14 +127,25 @@
     emptyStateEl.classList.add('hidden');
     postGridEl.classList.remove('hidden');
 
-    // Limit to what fits the viewport
-    const maxPosts = getMaxVisiblePosts();
-    const visiblePosts = posts.slice(0, maxPosts);
+    // In scroll mode, show all posts. In fit mode, limit to viewport.
+    const visiblePosts = scrollMode ? posts : posts.slice(0, getMaxVisiblePosts());
 
     visiblePosts.forEach((post) => {
       const card = createPostCard(post);
       postGridEl.appendChild(card);
     });
+  }
+
+  /**
+   * Apply scroll mode to body
+   */
+  function applyScrollMode() {
+    if (scrollMode) {
+      document.body.classList.add('scroll-mode');
+    } else {
+      document.body.classList.remove('scroll-mode');
+    }
+    scrollToggleEl.checked = scrollMode;
   }
 
   /**
@@ -244,11 +257,21 @@
 
   refreshBtnEl.addEventListener('click', handleRefresh);
 
-  // Re-render on window resize
+  // Toggle scroll mode
+  scrollToggleEl.addEventListener('change', () => {
+    scrollMode = scrollToggleEl.checked;
+    localStorage.setItem('scrollMode', scrollMode);
+    applyScrollMode();
+    filterPosts();
+  });
+
+  // Re-render on window resize (only in fit mode)
   let resizeTimeout;
   window.addEventListener('resize', () => {
-    clearTimeout(resizeTimeout);
-    resizeTimeout = setTimeout(filterPosts, 150);
+    if (!scrollMode) {
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(filterPosts, 150);
+    }
   });
 
   // Listen for storage changes (real-time updates)
@@ -262,6 +285,7 @@
   });
 
   // Initialize
+  applyScrollMode();
   loadPosts();
 
 })();
