@@ -434,17 +434,22 @@ body {
 }
 
 /* Scroll Mode - allows scrolling, shows all posts */
+html.scroll-mode,
 body.scroll-mode {
   height: auto;
-  overflow-y: auto;
+  min-height: 100%;
+  overflow-y: auto !important;
+  overflow-x: hidden;
 }
 
 body.scroll-mode .main {
   flex: none;
   overflow: visible;
+  min-height: auto;
 }
 
 body.scroll-mode .post-grid {
   overflow: visible;
   flex: none;
+  grid-auto-rows: var(--card-height);
 }

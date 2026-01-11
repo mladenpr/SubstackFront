@@ -4,11 +4,32 @@
 console.log('[SubstackFront] Background service worker started');
 
 /**
- * Get all stored posts
+ * Check if URL is a valid article (not comments/discussion/other non-articles)
+ */
+function isValidPostUrl(url) {
+  if (!url) return false;
+  // Must contain /p/ for posts
+  if (!url.includes('/p/')) return false;
+  // Exclude comments
+  if (url.includes('/comments')) return false;
+  if (url.includes('/comment/')) return false;
+  if (url.includes('/comment?')) return false;
+  if (url.endsWith('/comment')) return false;
+  // Exclude other non-article patterns
+  if (url.includes('/subscribe') || url.includes('/about') || url.includes('/archive')) return false;
+  if (url.includes('?action=') || url.includes('&action=')) return false;
+  if (url.includes('/discussion')) return false;
+  return true;
+}
+
+/**
+ * Get all stored posts (filters out invalid URLs)
  */
 async function getStoredPosts() {
   const result = await chrome.storage.local.get(['posts']);
-  return result.posts || [];
+  const posts = result.posts || [];
+  // Filter out any cached posts with invalid URLs
+  return posts.filter(post => isValidPostUrl(post.url));
 }
 
 /**
@@ -23,11 +44,14 @@ async function savePosts(newPosts) {
     postMap.set(post.url, post);
   });
 
+  // Filter new posts to only include valid URLs
+  const validNewPosts = newPosts.filter(post => isValidPostUrl(post.url));
+
   // Add or update with new posts
   let addedCount = 0;
   let updatedCount = 0;
 
-  newPosts.forEach(post => {
+  validNewPosts.forEach(post => {
     if (postMap.has(post.url)) {
       // Update existing post, but preserve isRead status
       const existing = postMap.get(post.url);
@@ -43,12 +67,15 @@ async function savePosts(newPosts) {
   });
 
   // Convert map back to array and sort by date (newest first)
+  const getPostDate = (post) => {
+    const dateStr = post.publishedAt || post.extractedAt;
+    if (!dateStr) return 0; // Posts without dates go to end
+    const date = new Date(dateStr);
+    return isNaN(date.getTime()) ? 0 : date.getTime();
+  };
+
   const allPosts = Array.from(postMap.values())
-    .sort((a, b) => {
-      const dateA = new Date(a.publishedAt || a.extractedAt);
-      const dateB = new Date(b.publishedAt || b.extractedAt);
-      return dateB - dateA;
-    });
+    .sort((a, b) => getPostDate(b) - getPostDate(a));
 
   // Store posts and update timestamp
   await chrome.storage.local.set({
@@ -94,67 +121,158 @@ async function getStats() {
   };
 }
 
+// Track pending refresh state
+let pendingRefreshTabId = null;
+let pendingRefreshResolve = null;
+let pendingRefreshReject = null;
+let pendingTabUpdateListener = null;
+
 /**
  * Refresh feed by opening Substack in a background tab
  */
 async function refreshFeed() {
   console.log('[SubstackFront] Starting background refresh...');
 
+  // Clear any previous pending refresh
+  if (pendingRefreshTabId) {
+    console.log('[SubstackFront] Cleaning up previous refresh attempt');
+    chrome.tabs.remove(pendingRefreshTabId).catch(() => {});
+    pendingRefreshTabId = null;
+  }
+
   return new Promise((resolve, reject) => {
+    pendingRefreshResolve = resolve;
+    pendingRefreshReject = reject;
+
+    // Clean up any previous listener
+    if (pendingTabUpdateListener) {
+      chrome.tabs.onUpdated.removeListener(pendingTabUpdateListener);
+    }
+
+    // Listen for tab updates to know when page is fully loaded
+    pendingTabUpdateListener = (tabId, changeInfo) => {
+      if (tabId === pendingRefreshTabId && changeInfo.status === 'complete') {
+        console.log('[SubstackFront] Background tab finished loading, triggering extraction...');
+        // Give extra time for Substack's JavaScript to render content
+        setTimeout(() => {
+          if (pendingRefreshTabId === tabId) {
+            // Send message to content script to trigger extraction
+            chrome.tabs.sendMessage(tabId, { type: 'TRIGGER_EXTRACTION' }, (response) => {
+              if (chrome.runtime.lastError) {
+                console.log('[SubstackFront] Could not send extraction trigger:', chrome.runtime.lastError.message);
+              } else {
+                console.log('[SubstackFront] Extraction triggered, response:', response);
+              }
+            });
+          }
+        }, 2000);
+      }
+    };
+
+    chrome.tabs.onUpdated.addListener(pendingTabUpdateListener);
+
     // Open Substack inbox in a new tab (not active)
     chrome.tabs.create({
       url: 'https://substack.com/inbox',
       active: false
     }, (tab) => {
-      const tabId = tab.id;
-      let resolved = false;
+      if (chrome.runtime.lastError) {
+        console.error('[SubstackFront] Failed to create tab:', chrome.runtime.lastError);
+        chrome.tabs.onUpdated.removeListener(pendingTabUpdateListener);
+        pendingTabUpdateListener = null;
+        reject(new Error(chrome.runtime.lastError.message));
+        return;
+      }
 
-      // Listen for messages from the content script in that tab
-      const messageListener = (message, sender) => {
-        if (sender.tab?.id === tabId && message.type === 'POSTS_EXTRACTED') {
-          console.log('[SubstackFront] Received posts from background tab');
-          resolved = true;
+      pendingRefreshTabId = tab.id;
+      console.log('[SubstackFront] Created background tab:', tab.id);
 
-          // Save the posts
-          savePosts(message.posts)
-            .then(result => {
-              // Close the tab
-              chrome.tabs.remove(tabId);
-              chrome.runtime.onMessage.removeListener(messageListener);
-              resolve(result);
-            })
-            .catch(error => {
-              chrome.tabs.remove(tabId);
-              chrome.runtime.onMessage.removeListener(messageListener);
-              reject(error);
-            });
-        }
-      };
-
-      chrome.runtime.onMessage.addListener(messageListener);
-
-      // Timeout after 15 seconds
+      // Timeout after 30 seconds
       setTimeout(() => {
-        if (!resolved) {
-          console.log('[SubstackFront] Background refresh timed out');
-          chrome.runtime.onMessage.removeListener(messageListener);
-          chrome.tabs.remove(tabId).catch(() => {});
-          reject(new Error('Refresh timed out'));
+        if (pendingTabUpdateListener) {
+          chrome.tabs.onUpdated.removeListener(pendingTabUpdateListener);
+          pendingTabUpdateListener = null;
         }
-      }, 15000);
+        if (pendingRefreshTabId === tab.id) {
+          console.log('[SubstackFront] Background refresh timed out');
+          chrome.tabs.remove(tab.id).catch(() => {});
+          pendingRefreshTabId = null;
+          if (pendingRefreshReject) {
+            pendingRefreshReject(new Error('Refresh timed out - try visiting substack.com/inbox manually'));
+            pendingRefreshReject = null;
+            pendingRefreshResolve = null;
+          }
+        }
+      }, 30000);
     });
   });
 }
 
+/**
+ * Clean up refresh state
+ */
+function cleanupRefreshState() {
+  if (pendingTabUpdateListener) {
+    chrome.tabs.onUpdated.removeListener(pendingTabUpdateListener);
+    pendingTabUpdateListener = null;
+  }
+}
+
+/**
+ * Handle posts received from a refresh tab
+ */
+async function handleRefreshPosts(tabId, posts) {
+  console.log('[SubstackFront] Handling refresh posts from tab:', tabId, 'count:', posts.length);
+
+  if (tabId !== pendingRefreshTabId) {
+    console.log('[SubstackFront] Ignoring posts from non-refresh tab');
+    return false;
+  }
+
+  cleanupRefreshState();
+
+  try {
+    const result = await savePosts(posts);
+    chrome.tabs.remove(tabId).catch(() => {});
+    pendingRefreshTabId = null;
+
+    if (pendingRefreshResolve) {
+      pendingRefreshResolve(result);
+      pendingRefreshResolve = null;
+      pendingRefreshReject = null;
+    }
+    return true;
+  } catch (error) {
+    chrome.tabs.remove(tabId).catch(() => {});
+    pendingRefreshTabId = null;
+
+    if (pendingRefreshReject) {
+      pendingRefreshReject(error);
+      pendingRefreshReject = null;
+      pendingRefreshResolve = null;
+    }
+    return false;
+  }
+}
+
 // Message handler
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('[SubstackFront] Received message:', message.type);
+  console.log('[SubstackFront] Received message:', message.type, 'from tab:', sender.tab?.id);
 
   switch (message.type) {
     case 'POSTS_EXTRACTED':
-      savePosts(message.posts)
-        .then(result => sendResponse({ success: true, ...result }))
-        .catch(error => sendResponse({ success: false, error: error.message }));
+      // Check if this is from a refresh tab
+      if (sender.tab?.id && sender.tab.id === pendingRefreshTabId) {
+        console.log('[SubstackFront] Posts from refresh tab');
+        handleRefreshPosts(sender.tab.id, message.posts)
+          .then(() => sendResponse({ success: true }))
+          .catch(error => sendResponse({ success: false, error: error.message }));
+      } else {
+        // Regular extraction from user browsing
+        savePosts(message.posts)
+          .then(result => sendResponse({ success: true, ...result }))
+          .catch(error => sendResponse({ success: false, error: error.message }));
+      }
       return true; // Keep channel open for async response
 
     case 'GET_POSTS':
@@ -182,9 +300,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
 
     case 'REFRESH_FEED':
+      console.log('[SubstackFront] REFRESH_FEED received, starting refresh...');
       refreshFeed()
-        .then(result => sendResponse({ success: true, ...result }))
-        .catch(error => sendResponse({ success: false, error: error.message }));
+        .then(result => {
+          console.log('[SubstackFront] Refresh completed:', result);
+          sendResponse({ success: true, ...result });
+        })
+        .catch(error => {
+          console.error('[SubstackFront] Refresh failed:', error);
+          sendResponse({ success: false, error: error.message });
+        });
       return true;
 
     default:

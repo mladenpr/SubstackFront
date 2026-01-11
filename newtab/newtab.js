@@ -128,7 +128,10 @@
     postGridEl.classList.remove('hidden');
 
     // In scroll mode, show all posts. In fit mode, limit to viewport.
-    const visiblePosts = scrollMode ? posts : posts.slice(0, getMaxVisiblePosts());
+    const maxVisible = getMaxVisiblePosts();
+    const visiblePosts = scrollMode ? posts : posts.slice(0, maxVisible);
+
+    console.log(`[SubstackFront] Rendering: scrollMode=${scrollMode}, total=${posts.length}, maxVisible=${maxVisible}, showing=${visiblePosts.length}`);
 
     visiblePosts.forEach((post) => {
       const card = createPostCard(post);
@@ -137,12 +140,14 @@
   }
 
   /**
-   * Apply scroll mode to body
+   * Apply scroll mode to html and body
    */
   function applyScrollMode() {
     if (scrollMode) {
+      document.documentElement.classList.add('scroll-mode');
       document.body.classList.add('scroll-mode');
     } else {
+      document.documentElement.classList.remove('scroll-mode');
       document.body.classList.remove('scroll-mode');
     }
     scrollToggleEl.checked = scrollMode;
@@ -263,7 +268,8 @@
 
       if (response.success) {
         console.log('[SubstackFront] Refresh complete:', response);
-        // Posts will be updated automatically via storage listener
+        // Force reload posts instead of relying on storage listener
+        await loadPosts();
       } else {
         console.error('[SubstackFront] Refresh failed:', response.error);
         alert('Refresh failed: ' + response.error);
@@ -291,6 +297,7 @@
   scrollToggleEl.addEventListener('change', () => {
     scrollMode = scrollToggleEl.checked;
     localStorage.setItem('scrollMode', scrollMode);
+    console.log(`[SubstackFront] Scroll toggle changed: scrollMode=${scrollMode}`);
     applyScrollMode();
     filterPosts();
   });
