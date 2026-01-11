@@ -94,6 +94,58 @@ async function getStats() {
   };
 }
 
+/**
+ * Refresh feed by opening Substack in a background tab
+ */
+async function refreshFeed() {
+  console.log('[SubstackFront] Starting background refresh...');
+
+  return new Promise((resolve, reject) => {
+    // Open Substack inbox in a new tab (not active)
+    chrome.tabs.create({
+      url: 'https://substack.com/inbox',
+      active: false
+    }, (tab) => {
+      const tabId = tab.id;
+      let resolved = false;
+
+      // Listen for messages from the content script in that tab
+      const messageListener = (message, sender) => {
+        if (sender.tab?.id === tabId && message.type === 'POSTS_EXTRACTED') {
+          console.log('[SubstackFront] Received posts from background tab');
+          resolved = true;
+
+          // Save the posts
+          savePosts(message.posts)
+            .then(result => {
+              // Close the tab
+              chrome.tabs.remove(tabId);
+              chrome.runtime.onMessage.removeListener(messageListener);
+              resolve(result);
+            })
+            .catch(error => {
+              chrome.tabs.remove(tabId);
+              chrome.runtime.onMessage.removeListener(messageListener);
+              reject(error);
+            });
+        }
+      };
+
+      chrome.runtime.onMessage.addListener(messageListener);
+
+      // Timeout after 15 seconds
+      setTimeout(() => {
+        if (!resolved) {
+          console.log('[SubstackFront] Background refresh timed out');
+          chrome.runtime.onMessage.removeListener(messageListener);
+          chrome.tabs.remove(tabId).catch(() => {});
+          reject(new Error('Refresh timed out'));
+        }
+      }, 15000);
+    });
+  });
+}
+
 // Message handler
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('[SubstackFront] Received message:', message.type);
@@ -126,6 +178,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case 'GET_STATS':
       getStats()
         .then(stats => sendResponse({ success: true, ...stats }))
+        .catch(error => sendResponse({ success: false, error: error.message }));
+      return true;
+
+    case 'REFRESH_FEED':
+      refreshFeed()
+        .then(result => sendResponse({ success: true, ...result }))
         .catch(error => sendResponse({ success: false, error: error.message }));
       return true;
 

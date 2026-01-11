@@ -243,10 +243,40 @@
   }
 
   /**
-   * Refresh - open Substack inbox
+   * Refresh feed in background
    */
-  function handleRefresh() {
-    window.open('https://substack.com/inbox', '_blank');
+  async function handleRefresh() {
+    // Disable button and show loading state
+    refreshBtnEl.disabled = true;
+    refreshBtnEl.classList.add('loading');
+    const originalText = refreshBtnEl.innerHTML;
+    refreshBtnEl.innerHTML = `
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M23 4v6h-6M1 20v-6h6"/>
+        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+      </svg>
+      Refreshing...
+    `;
+
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'REFRESH_FEED' });
+
+      if (response.success) {
+        console.log('[SubstackFront] Refresh complete:', response);
+        // Posts will be updated automatically via storage listener
+      } else {
+        console.error('[SubstackFront] Refresh failed:', response.error);
+        alert('Refresh failed: ' + response.error);
+      }
+    } catch (error) {
+      console.error('[SubstackFront] Refresh error:', error);
+      alert('Refresh failed: ' + error.message);
+    } finally {
+      // Restore button
+      refreshBtnEl.disabled = false;
+      refreshBtnEl.classList.remove('loading');
+      refreshBtnEl.innerHTML = originalText;
+    }
   }
 
   // Event Listeners

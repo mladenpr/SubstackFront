@@ -15,8 +15,9 @@
   --font-main: 'Courier Prime', 'Courier New', Courier, monospace;
   --font-display: 'Special Elite', 'Courier New', monospace;
 
-  --radius: 0;
-  --transition: 0.12s ease;
+  --card-width: 200px;
+  --card-height: 240px;
+  --gap: 10px;
 }
 
 *, *::before, *::after {
@@ -91,16 +92,29 @@ body {
   font-size: 0.75rem;
   color: var(--color-text);
   cursor: pointer;
-  transition: background var(--transition);
+  transition: background 0.12s;
 }
 
 .btn:hover {
   background: var(--color-bg);
 }
 
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .btn svg {
   width: 12px;
   height: 12px;
+}
+
+.btn.loading svg {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 /* Toggle Switch */
@@ -164,13 +178,14 @@ body {
   border-color: var(--color-accent);
 }
 
-/* Main Content - fills remaining space */
+/* Main Content */
 .main {
   flex: 1;
   padding: 12px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
 
 /* Loading State */
@@ -192,10 +207,6 @@ body {
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin-bottom: 12px;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
 }
 
 .loading p {
@@ -240,61 +251,17 @@ body {
   text-decoration: underline;
 }
 
-/* Post Grid - viewport fitted, no scroll */
+/* Post Grid - Fixed card sizes */
 .post-grid {
-  flex: 1;
   display: grid;
-  gap: 10px;
+  gap: var(--gap);
+  grid-template-columns: repeat(auto-fill, minmax(var(--card-width), 1fr));
+  grid-auto-rows: var(--card-height);
   overflow: hidden;
-  /* Default: auto-fit based on available space */
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  grid-auto-rows: 1fr;
+  flex: 1;
 }
 
-/* Responsive grid columns */
-@media (min-width: 1400px) {
-  .post-grid {
-    grid-template-columns: repeat(6, 1fr);
-    grid-template-rows: repeat(3, 1fr);
-  }
-}
-
-@media (min-width: 1100px) and (max-width: 1399px) {
-  .post-grid {
-    grid-template-columns: repeat(5, 1fr);
-    grid-template-rows: repeat(3, 1fr);
-  }
-}
-
-@media (min-width: 900px) and (max-width: 1099px) {
-  .post-grid {
-    grid-template-columns: repeat(4, 1fr);
-    grid-template-rows: repeat(3, 1fr);
-  }
-}
-
-@media (min-width: 700px) and (max-width: 899px) {
-  .post-grid {
-    grid-template-columns: repeat(3, 1fr);
-    grid-template-rows: repeat(3, 1fr);
-  }
-}
-
-@media (min-width: 500px) and (max-width: 699px) {
-  .post-grid {
-    grid-template-columns: repeat(2, 1fr);
-    grid-template-rows: repeat(4, 1fr);
-  }
-}
-
-@media (max-width: 499px) {
-  .post-grid {
-    grid-template-columns: 1fr;
-    grid-template-rows: repeat(5, 1fr);
-  }
-}
-
-/* Post Card - compact */
+/* Post Card - Fixed size */
 .post-card {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
@@ -302,8 +269,8 @@ body {
   cursor: pointer;
   display: flex;
   flex-direction: column;
-  transition: border-color var(--transition);
-  min-height: 0;
+  transition: border-color 0.12s;
+  height: var(--card-height);
 }
 
 .post-card:hover {
@@ -318,11 +285,11 @@ body {
   opacity: 0.8;
 }
 
-/* Card Image - smaller */
+/* Card Image - Fixed height */
 .post-image {
   width: 100%;
-  flex: 1;
-  min-height: 60px;
+  height: 120px;
+  flex-shrink: 0;
   object-fit: cover;
   background: var(--color-bg);
   border-bottom: 1px solid var(--color-border);
@@ -331,8 +298,8 @@ body {
 
 .post-image-placeholder {
   width: 100%;
-  flex: 1;
-  min-height: 60px;
+  height: 120px;
+  flex-shrink: 0;
   background: var(--color-bg);
   display: flex;
   align-items: center;
@@ -343,14 +310,14 @@ body {
   border-bottom: 1px solid var(--color-border);
 }
 
-/* Card Content - compact */
+/* Card Content */
 .post-content {
   padding: 8px 10px;
-  flex-shrink: 0;
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  max-height: 50%;
+  overflow: hidden;
 }
 
 .post-publication {
@@ -384,7 +351,6 @@ body {
   font-weight: 400;
   line-height: 1.25;
   color: var(--color-text);
-
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -395,7 +361,6 @@ body {
   font-size: 0.7rem;
   color: var(--color-text-secondary);
   line-height: 1.3;
-
   display: -webkit-box;
   -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
@@ -410,6 +375,7 @@ body {
   color: var(--color-text-muted);
   padding-top: 4px;
   border-top: 1px dotted var(--color-border);
+  margin-top: auto;
 }
 
 .post-date {
@@ -423,7 +389,7 @@ body {
   border-radius: 50%;
 }
 
-/* Footer - minimal */
+/* Footer */
 .footer {
   flex-shrink: 0;
   padding: 8px 20px;
@@ -441,6 +407,11 @@ body {
 
 /* Mobile adjustments */
 @media (max-width: 600px) {
+  :root {
+    --card-width: 160px;
+    --card-height: 200px;
+  }
+
   .header-content {
     flex-wrap: wrap;
     gap: 8px;
@@ -462,29 +433,18 @@ body {
   }
 }
 
-/* Scroll Mode */
+/* Scroll Mode - allows scrolling, shows all posts */
 body.scroll-mode {
   height: auto;
-  overflow: auto;
+  overflow-y: auto;
 }
 
 body.scroll-mode .main {
   flex: none;
   overflow: visible;
-  min-height: auto;
 }
 
 body.scroll-mode .post-grid {
-  grid-template-rows: auto;
-  grid-auto-rows: auto;
-}
-
-body.scroll-mode .post-card {
-  min-height: 280px;
-}
-
-body.scroll-mode .post-image,
-body.scroll-mode .post-image-placeholder {
+  overflow: visible;
   flex: none;
-  height: 140px;
 }
