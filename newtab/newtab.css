@@ -1,5 +1,10 @@
 /* SubstackFront - Retro Typewriter Style */
 
+/* Hide page until mode check completes - prevents flash before redirect */
+html.loading-mode body {
+  display: none !important;
+}
+
 @import url('https://fonts.googleapis.com/css2?family=Special+Elite&family=Courier+Prime:wght@400;700&display=swap');
 
 :root {
@@ -176,6 +181,13 @@ body {
 .toggle-switch input:checked + .toggle-slider::before {
   transform: translateX(18px);
   border-color: var(--color-accent);
+}
+
+/* Mode Toggle - visual separator */
+.mode-toggle {
+  padding-right: 10px;
+  margin-right: 10px;
+  border-right: 1px solid var(--color-border);
 }
 
 /* Main Content */

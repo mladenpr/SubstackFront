@@ -10,6 +10,7 @@
   const publicationFilterEl = document.getElementById('publication-filter');
   const refreshBtnEl = document.getElementById('refresh-btn');
   const scrollToggleEl = document.getElementById('scroll-toggle');
+  const modeToggleEl = document.getElementById('mode-toggle');
   const statsEl = document.getElementById('stats');
 
   // State
@@ -302,6 +303,13 @@
     filterPosts();
   });
 
+  // Toggle mode (New Tab / Popup Only)
+  modeToggleEl.addEventListener('change', () => {
+    const popupOnlyMode = modeToggleEl.checked;
+    chrome.storage.local.set({ popupOnlyMode: popupOnlyMode });
+    console.log('[SubstackFront] Mode changed:', popupOnlyMode ? 'Popup Only' : 'New Tab');
+  });
+
   // Re-render on window resize (only in fit mode)
   let resizeTimeout;
   window.addEventListener('resize', () => {
@@ -319,6 +327,11 @@
       updateStats(allPosts);
       filterPosts();
     }
+  });
+
+  // Initialize mode toggle state
+  chrome.storage.local.get(['popupOnlyMode'], (result) => {
+    modeToggleEl.checked = result.popupOnlyMode === true;
   });
 
   // Initialize

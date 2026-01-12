@@ -312,6 +312,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         });
       return true;
 
+    case 'OPEN_DEFAULT_NEWTAB':
+      // User has popup-only mode enabled, show Chrome's default new tab
+      if (sender.tab?.id) {
+        // Navigate this tab to Chrome's default new tab page
+        chrome.tabs.update(sender.tab.id, { url: 'chrome://new-tab-page' });
+      }
+      return false;
+
     default:
       sendResponse({ success: false, error: 'Unknown message type' });
   }

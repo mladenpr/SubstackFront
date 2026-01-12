@@ -10,6 +10,7 @@
   const refreshBtnEl = document.getElementById('refresh-btn');
   const expandBtnEl = document.getElementById('expand-btn');
   const statsEl = document.getElementById('stats');
+  const modeToggleEl = document.getElementById('mode-toggle');
 
   // State
   let allPosts = [];
@@ -201,6 +202,13 @@
   refreshBtnEl.addEventListener('click', handleRefresh);
   expandBtnEl.addEventListener('click', handleExpand);
 
+  // Mode toggle - switch between New Tab and Popup Only
+  modeToggleEl.addEventListener('change', () => {
+    const popupOnlyMode = modeToggleEl.checked;
+    chrome.storage.local.set({ popupOnlyMode: popupOnlyMode });
+    console.log('[SubstackFront] Mode changed:', popupOnlyMode ? 'Popup Only' : 'New Tab');
+  });
+
   // Listen for storage changes (real-time updates)
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName === 'local' && changes.posts) {
@@ -210,7 +218,12 @@
     }
   });
 
-  // Initialize
+  // Initialize mode toggle state
+  chrome.storage.local.get(['popupOnlyMode'], (result) => {
+    modeToggleEl.checked = result.popupOnlyMode === true;
+  });
+
+  // Initialize posts
   loadPosts();
 
 })();
