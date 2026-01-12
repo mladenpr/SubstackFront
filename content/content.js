@@ -331,10 +331,6 @@
     subtree: true
   });
 
-  // Also expose a manual trigger for debugging
-  window.__substackFrontExtract = runExtraction;
-  console.log('[SubstackFront] Manual extraction available: window.__substackFrontExtract()');
-
   // Listen for messages from background script (e.g., refresh trigger)
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === 'TRIGGER_EXTRACTION') {

@@ -12,11 +12,45 @@
   const scrollToggleEl = document.getElementById('scroll-toggle');
   const modeToggleEl = document.getElementById('mode-toggle');
   const statsEl = document.getElementById('stats');
+  const toastEl = document.getElementById('toast');
+  const toastMessageEl = toastEl.querySelector('.toast-message');
 
   // State
   let allPosts = [];
   let currentFilter = '';
   let scrollMode = localStorage.getItem('scrollMode') === 'true';
+  let toastTimeout = null;
+
+  /**
+   * Show toast notification
+   * @param {string} message - Message to display
+   * @param {string} type - 'error', 'success', or 'info'
+   */
+  function showToast(message, type = 'info') {
+    // Clear any existing timeout
+    if (toastTimeout) {
+      clearTimeout(toastTimeout);
+    }
+
+    // Remove existing type classes
+    toastEl.classList.remove('toast-error', 'toast-success', 'hidden');
+
+    // Add type class
+    if (type === 'error') {
+      toastEl.classList.add('toast-error');
+    } else if (type === 'success') {
+      toastEl.classList.add('toast-success');
+    }
+
+    // Set message and show
+    toastMessageEl.textContent = message;
+    toastEl.classList.add('show');
+
+    // Auto-hide after 3 seconds
+    toastTimeout = setTimeout(() => {
+      toastEl.classList.remove('show');
+    }, 3000);
+  }
 
   /**
    * Format relative date
@@ -271,13 +305,14 @@
         console.log('[SubstackFront] Refresh complete:', response);
         // Force reload posts instead of relying on storage listener
         await loadPosts();
+        showToast('Feed refreshed successfully', 'success');
       } else {
         console.error('[SubstackFront] Refresh failed:', response.error);
-        alert('Refresh failed: ' + response.error);
+        showToast('Refresh failed: ' + response.error, 'error');
       }
     } catch (error) {
       console.error('[SubstackFront] Refresh error:', error);
-      alert('Refresh failed: ' + error.message);
+      showToast('Refresh failed: ' + error.message, 'error');
     } finally {
       // Restore button
       refreshBtnEl.disabled = false;

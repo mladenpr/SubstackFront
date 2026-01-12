@@ -465,3 +465,35 @@ body.scroll-mode .post-grid {
   flex: none;
   grid-auto-rows: var(--card-height);
 }
+
+/* Toast Notifications */
+.toast {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%) translateY(100px);
+  padding: 10px 20px;
+  background: var(--color-text);
+  color: var(--color-surface);
+  font-family: var(--font-main);
+  font-size: 0.8rem;
+  border: 1px solid var(--color-border-dark);
+  z-index: 1000;
+  opacity: 0;
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.toast.show {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+}
+
+.toast.toast-error {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.toast.toast-success {
+  background: #2d5a27;
+  border-color: #2d5a27;
+}

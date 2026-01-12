@@ -30,8 +30,8 @@
 }
 
 html, body {
-  width: 500px;
-  height: 400px;
+  width: 720px;
+  height: 680px;
   overflow: hidden;
 }
 
@@ -163,11 +163,11 @@ body {
   text-decoration: underline;
 }
 
-/* Post Grid - always scrollable in popup, two columns */
+/* Post Grid - always scrollable in popup, three columns */
 .post-grid {
   display: grid;
   gap: var(--gap);
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   grid-auto-rows: var(--card-height);
 }
 
@@ -347,4 +347,36 @@ body {
 
 .hidden {
   display: none !important;
+}
+
+/* Toast Notifications */
+.toast {
+  position: fixed;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%) translateY(60px);
+  padding: 8px 16px;
+  background: var(--color-text);
+  color: var(--color-surface);
+  font-family: var(--font-main);
+  font-size: 0.7rem;
+  border: 1px solid var(--color-border-dark);
+  z-index: 1000;
+  opacity: 0;
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.toast.show {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+}
+
+.toast.toast-error {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.toast.toast-success {
+  background: #2d5a27;
+  border-color: #2d5a27;
 }

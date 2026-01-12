@@ -11,9 +11,38 @@
   const expandBtnEl = document.getElementById('expand-btn');
   const statsEl = document.getElementById('stats');
   const modeToggleEl = document.getElementById('mode-toggle');
+  const toastEl = document.getElementById('toast');
+  const toastMessageEl = toastEl.querySelector('.toast-message');
 
   // State
   let allPosts = [];
+  let toastTimeout = null;
+
+  /**
+   * Show toast notification
+   * @param {string} message - Message to display
+   * @param {string} type - 'error', 'success', or 'info'
+   */
+  function showToast(message, type = 'info') {
+    if (toastTimeout) {
+      clearTimeout(toastTimeout);
+    }
+
+    toastEl.classList.remove('toast-error', 'toast-success', 'hidden');
+
+    if (type === 'error') {
+      toastEl.classList.add('toast-error');
+    } else if (type === 'success') {
+      toastEl.classList.add('toast-success');
+    }
+
+    toastMessageEl.textContent = message;
+    toastEl.classList.add('show');
+
+    toastTimeout = setTimeout(() => {
+      toastEl.classList.remove('show');
+    }, 3000);
+  }
 
   /**
    * Format relative date (compact format for popup)
@@ -179,11 +208,14 @@
       const response = await chrome.runtime.sendMessage({ type: 'REFRESH_FEED' });
       if (response.success) {
         await loadPosts();
+        showToast('Feed refreshed', 'success');
       } else {
         console.error('[SubstackFront Popup] Refresh failed:', response.error);
+        showToast('Refresh failed: ' + response.error, 'error');
       }
     } catch (error) {
       console.error('[SubstackFront Popup] Refresh error:', error);
+      showToast('Refresh failed: ' + error.message, 'error');
     } finally {
       refreshBtnEl.disabled = false;
       refreshBtnEl.classList.remove('loading');

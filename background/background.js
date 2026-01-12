@@ -3,6 +3,11 @@
 
 console.log('[SubstackFront] Background service worker started');
 
+// Storage limits
+const MAX_POSTS = 300;
+const STORAGE_WARNING_THRESHOLD = 4 * 1024 * 1024; // 4MB (80% of 5MB limit)
+const MAX_POST_AGE_DAYS = 30;
+
 /**
  * Check if URL is a valid article (not comments/discussion/other non-articles)
  */
@@ -74,14 +79,23 @@ async function savePosts(newPosts) {
     return isNaN(date.getTime()) ? 0 : date.getTime();
   };
 
-  const allPosts = Array.from(postMap.values())
+  let allPosts = Array.from(postMap.values())
     .sort((a, b) => getPostDate(b) - getPostDate(a));
+
+  // Limit to MAX_POSTS (oldest are removed)
+  if (allPosts.length > MAX_POSTS) {
+    console.log(`[SubstackFront] Trimming posts from ${allPosts.length} to ${MAX_POSTS}`);
+    allPosts = allPosts.slice(0, MAX_POSTS);
+  }
 
   // Store posts and update timestamp
   await chrome.storage.local.set({
     posts: allPosts,
     lastUpdated: new Date().toISOString()
   });
+
+  // Check storage usage and auto-cleanup if needed
+  await checkAndCleanupStorage();
 
   console.log(`[SubstackFront] Saved posts - Added: ${addedCount}, Updated: ${updatedCount}, Total: ${allPosts.length}`);
 
@@ -119,6 +133,69 @@ async function getStats() {
     lastUpdated: result.lastUpdated,
     publications: [...new Set(posts.map(p => p.publication))]
   };
+}
+
+/**
+ * Get storage usage in bytes
+ */
+async function getStorageUsage() {
+  return new Promise((resolve) => {
+    chrome.storage.local.getBytesInUse(null, (bytesInUse) => {
+      resolve(bytesInUse);
+    });
+  });
+}
+
+/**
+ * Get detailed storage stats including byte usage
+ */
+async function getStorageStats() {
+  const bytesUsed = await getStorageUsage();
+  const stats = await getStats();
+  const maxBytes = 5 * 1024 * 1024; // 5MB chrome.storage.local limit
+
+  return {
+    ...stats,
+    bytesUsed,
+    bytesMax: maxBytes,
+    percentUsed: Math.round((bytesUsed / maxBytes) * 100),
+    isNearLimit: bytesUsed >= STORAGE_WARNING_THRESHOLD
+  };
+}
+
+/**
+ * Remove posts older than maxAgeDays
+ */
+async function cleanupOldPosts(maxAgeDays = MAX_POST_AGE_DAYS) {
+  const posts = await getStoredPosts();
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - maxAgeDays);
+
+  const filteredPosts = posts.filter(post => {
+    const postDate = new Date(post.publishedAt || post.extractedAt);
+    return !isNaN(postDate.getTime()) && postDate >= cutoffDate;
+  });
+
+  const removedCount = posts.length - filteredPosts.length;
+
+  if (removedCount > 0) {
+    await chrome.storage.local.set({ posts: filteredPosts });
+    console.log(`[SubstackFront] Auto-cleanup: removed ${removedCount} posts older than ${maxAgeDays} days`);
+  }
+
+  return removedCount;
+}
+
+/**
+ * Check storage usage and cleanup if exceeding threshold
+ */
+async function checkAndCleanupStorage() {
+  const bytesUsed = await getStorageUsage();
+
+  if (bytesUsed >= STORAGE_WARNING_THRESHOLD) {
+    console.log(`[SubstackFront] Storage usage high (${Math.round(bytesUsed / 1024 / 1024 * 100) / 100}MB), running auto-cleanup...`);
+    await cleanupOldPosts();
+  }
 }
 
 // Track pending refresh state
@@ -295,6 +372,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     case 'GET_STATS':
       getStats()
+        .then(stats => sendResponse({ success: true, ...stats }))
+        .catch(error => sendResponse({ success: false, error: error.message }));
+      return true;
+
+    case 'GET_STORAGE_STATS':
+      getStorageStats()
         .then(stats => sendResponse({ success: true, ...stats }))
         .catch(error => sendResponse({ success: false, error: error.message }));
       return true;
