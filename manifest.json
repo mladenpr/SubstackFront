@@ -5,8 +5,7 @@
   "description": "A magazine-style front page for your Substack subscriptions",
 
   "permissions": [
-    "storage",
-    "tabs"
+    "storage"
   ],
 
   "host_permissions": [
