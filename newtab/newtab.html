@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en" class="loading-mode">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SubstackFront</title>
+  <!-- CSS first to hide body immediately via .loading-mode -->
+  <link rel="stylesheet" href="newtab.css">
+  <!-- Then check mode and redirect or show page -->
+  <script src="mode-check.js"></script>
+</head>
+<body>
+  <header class="header">
+    <div class="header-content">
+      <h1 class="logo">SubstackFront</h1>
+      <div class="header-actions">
+        <div class="toggle-group mode-toggle">
+          <span class="toggle-label">New Tab</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="mode-toggle">
+            <span class="toggle-slider"></span>
+          </label>
+          <span class="toggle-label">Popup Only</span>
+        </div>
+        <div class="toggle-group">
+          <span class="toggle-label">Fit</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="scroll-toggle">
+            <span class="toggle-slider"></span>
+          </label>
+          <span class="toggle-label">Scroll</span>
+        </div>
+        <select id="publication-filter" class="filter-select">
+          <option value="">All Publications</option>
+        </select>
+        <button id="refresh-btn" class="btn btn-secondary" title="Visit Substack to refresh">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M23 4v6h-6M1 20v-6h6"/>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+          </svg>
+          Refresh
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="main">
+    <!-- Loading State -->
+    <div id="loading" class="loading">
+      <div class="loading-spinner"></div>
+      <p>Loading your feed...</p>
+    </div>
+
+    <!-- Empty State -->
+    <div id="empty-state" class="empty-state hidden">
+      <div class="empty-icon">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+        </svg>
+      </div>
+      <h2>No posts yet</h2>
+      <p>Visit <a href="https://substack.com/inbox" target="_blank">your Substack inbox</a> to start collecting posts.</p>
+    </div>
+
+    <!-- Post Grid -->
+    <div id="post-grid" class="post-grid hidden"></div>
+  </main>
+
+  <footer class="footer">
+    <p id="stats"></p>
+  </footer>
+
+  <!-- Toast Notifications -->
+  <div id="toast" class="toast hidden">
+    <span class="toast-message"></span>
+  </div>
+
+  <script src="newtab.js"></script>
+</body>
+</html>
