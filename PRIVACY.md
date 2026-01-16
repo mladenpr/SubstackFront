@@ -1,16 +1,16 @@
-# Privacy Policy for SubstackFront
+# Privacy Policy for Substack Front
 
-**Last Updated:** January 12, 2026
+**Last Updated:** January 16, 2026
 
 ## Overview
 
-SubstackFront is a browser extension that displays your Substack subscriptions in a magazine-style layout. This privacy policy explains what data the extension accesses, how it's stored, and your control over that data.
+Substack Front is a browser extension that displays your Substack subscriptions in a magazine-style layout. This privacy policy explains what data the extension accesses, how it's stored, and your control over that data.
 
 ## Data Collection
 
 ### What We Collect
 
-SubstackFront extracts the following information from your Substack inbox page:
+Substack Front extracts the following information from your Substack inbox page:
 
 - Post titles and subtitles
 - Publication names
@@ -64,7 +64,7 @@ You have full control over your data:
 
 ## Third-Party Services
 
-The extension loads fonts from Google Fonts (fonts.googleapis.com). No other external services are used. Google's privacy policy applies to font loading: https://policies.google.com/privacy
+This extension does not use any third-party services. All fonts are system fonts that are already installed on your device.
 
 ## Children's Privacy
 
@@ -76,7 +76,7 @@ Updates to this privacy policy will be reflected in the "Last Updated" date abov
 
 ## Contact
 
-For questions about this privacy policy or the extension, please open an issue at: https://github.com/[your-username]/SubstackFront/issues
+For questions about this privacy policy or the extension, please open an issue at: https://github.com/[your-username]/Substack Front/issues
 
 ## Summary
 
