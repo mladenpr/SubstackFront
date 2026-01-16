@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "SubstackFront",
-  "version": "1.0.0",
+  "name": "Substack Front",
+  "version": "1.0.1",
   "description": "A magazine-style front page for your Substack subscriptions",
 
   "permissions": [
@@ -19,7 +19,7 @@
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     },
-    "default_title": "SubstackFront"
+    "default_title": "Substack Front"
   },
 
   "background": {
