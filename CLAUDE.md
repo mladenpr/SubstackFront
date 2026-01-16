@@ -1,4 +1,4 @@
-# SubstackFront
+# Substack Front
 
 Chrome extension that provides a magazine-style front page for Substack subscriptions.
 
