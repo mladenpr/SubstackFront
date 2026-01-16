@@ -9,8 +9,6 @@
   const postGridEl = document.getElementById('post-grid');
   const publicationFilterEl = document.getElementById('publication-filter');
   const refreshBtnEl = document.getElementById('refresh-btn');
-  const scrollToggleEl = document.getElementById('scroll-toggle');
-  const modeToggleEl = document.getElementById('mode-toggle');
   const statsEl = document.getElementById('stats');
   const toastEl = document.getElementById('toast');
   const toastMessageEl = toastEl.querySelector('.toast-message');
@@ -18,7 +16,6 @@
   // State
   let allPosts = [];
   let currentFilter = '';
-  let scrollMode = localStorage.getItem('scrollMode') === 'true';
   let toastTimeout = null;
 
   /**
@@ -84,49 +81,6 @@
   }
 
   /**
-   * Calculate max posts that fit the viewport grid dynamically
-   */
-  function getMaxVisiblePosts() {
-    const main = document.querySelector('.main');
-    if (!main) {
-      // Fallback if main element not found
-      return 18;
-    }
-
-    // Get computed styles for accurate measurements
-    const mainStyle = getComputedStyle(main);
-    const paddingX = parseFloat(mainStyle.paddingLeft) + parseFloat(mainStyle.paddingRight);
-    const paddingY = parseFloat(mainStyle.paddingTop) + parseFloat(mainStyle.paddingBottom);
-
-    // Available space inside main (excluding padding)
-    const availableWidth = main.clientWidth - paddingX;
-    const availableHeight = main.clientHeight - paddingY;
-
-    // Get CSS variable values from root
-    const rootStyle = getComputedStyle(document.documentElement);
-    const cardWidth = parseFloat(rootStyle.getPropertyValue('--card-width')) || 200;
-    const cardHeight = parseFloat(rootStyle.getPropertyValue('--card-height')) || 240;
-    const gap = parseFloat(rootStyle.getPropertyValue('--gap')) || 10;
-
-    // Calculate how many columns fit
-    // Formula for auto-fill with minmax: floor((availableWidth + gap) / (cardWidth + gap))
-    const cols = Math.floor((availableWidth + gap) / (cardWidth + gap));
-
-    // Calculate how many rows fit
-    const rows = Math.floor((availableHeight + gap) / (cardHeight + gap));
-
-    // Ensure at least 1 column and 1 row
-    const effectiveCols = Math.max(1, cols);
-    const effectiveRows = Math.max(1, rows);
-
-    const maxPosts = effectiveCols * effectiveRows;
-
-    console.log(`[SubstackFront] getMaxVisiblePosts: ${Math.round(availableWidth)}x${Math.round(availableHeight)}px -> ${effectiveCols}cols x ${effectiveRows}rows = ${maxPosts} posts`);
-
-    return maxPosts;
-  }
-
-  /**
    * Create post card HTML
    */
   function createPostCard(post) {
@@ -178,7 +132,7 @@
   }
 
   /**
-   * Render posts to grid (limited to viewport capacity in fit mode)
+   * Render posts to grid
    */
   function renderPosts(posts) {
     postGridEl.innerHTML = '';
@@ -192,30 +146,10 @@
     emptyStateEl.classList.add('hidden');
     postGridEl.classList.remove('hidden');
 
-    // In scroll mode, show all posts. In fit mode, limit to viewport.
-    const maxVisible = getMaxVisiblePosts();
-    const visiblePosts = scrollMode ? posts : posts.slice(0, maxVisible);
-
-    console.log(`[SubstackFront] Rendering: scrollMode=${scrollMode}, total=${posts.length}, maxVisible=${maxVisible}, showing=${visiblePosts.length}`);
-
-    visiblePosts.forEach((post) => {
+    posts.forEach((post) => {
       const card = createPostCard(post);
       postGridEl.appendChild(card);
     });
-  }
-
-  /**
-   * Apply scroll mode to html and body
-   */
-  function applyScrollMode() {
-    if (scrollMode) {
-      document.documentElement.classList.add('scroll-mode');
-      document.body.classList.add('scroll-mode');
-    } else {
-      document.documentElement.classList.remove('scroll-mode');
-      document.body.classList.remove('scroll-mode');
-    }
-    scrollToggleEl.checked = scrollMode;
   }
 
   /**
@@ -359,31 +293,6 @@
 
   refreshBtnEl.addEventListener('click', handleRefresh);
 
-  // Toggle scroll mode
-  scrollToggleEl.addEventListener('change', () => {
-    scrollMode = scrollToggleEl.checked;
-    localStorage.setItem('scrollMode', scrollMode);
-    console.log(`[SubstackFront] Scroll toggle changed: scrollMode=${scrollMode}`);
-    applyScrollMode();
-    filterPosts();
-  });
-
-  // Toggle mode (New Tab / Popup Only)
-  modeToggleEl.addEventListener('change', () => {
-    const popupOnlyMode = modeToggleEl.checked;
-    chrome.storage.local.set({ popupOnlyMode: popupOnlyMode });
-    console.log('[SubstackFront] Mode changed:', popupOnlyMode ? 'Popup Only' : 'New Tab');
-  });
-
-  // Re-render on window resize (only in fit mode)
-  let resizeTimeout;
-  window.addEventListener('resize', () => {
-    if (!scrollMode) {
-      clearTimeout(resizeTimeout);
-      resizeTimeout = setTimeout(filterPosts, 150);
-    }
-  });
-
   // Listen for storage changes (real-time updates)
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName === 'local' && changes.posts) {
@@ -394,13 +303,7 @@
     }
   });
 
-  // Initialize mode toggle state
-  chrome.storage.local.get(['popupOnlyMode'], (result) => {
-    modeToggleEl.checked = result.popupOnlyMode === true;
-  });
-
   // Initialize
-  applyScrollMode();
   loadPosts();
 
 })();

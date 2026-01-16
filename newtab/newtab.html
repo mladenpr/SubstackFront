@@ -1,35 +1,16 @@
 <!DOCTYPE html>
-<html lang="en" class="loading-mode">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SubstackFront</title>
-  <!-- CSS first to hide body immediately via .loading-mode -->
   <link rel="stylesheet" href="newtab.css">
-  <!-- Then check mode and redirect or show page -->
-  <script src="mode-check.js"></script>
 </head>
 <body>
   <header class="header">
     <div class="header-content">
       <h1 class="logo">SubstackFront</h1>
       <div class="header-actions">
-        <div class="toggle-group mode-toggle">
-          <span class="toggle-label">New Tab</span>
-          <label class="toggle-switch">
-            <input type="checkbox" id="mode-toggle">
-            <span class="toggle-slider"></span>
-          </label>
-          <span class="toggle-label">Popup Only</span>
-        </div>
-        <div class="toggle-group">
-          <span class="toggle-label">Fit</span>
-          <label class="toggle-switch">
-            <input type="checkbox" id="scroll-toggle">
-            <span class="toggle-slider"></span>
-          </label>
-          <span class="toggle-label">Scroll</span>
-        </div>
         <select id="publication-filter" class="filter-select">
           <option value="">All Publications</option>
         </select>

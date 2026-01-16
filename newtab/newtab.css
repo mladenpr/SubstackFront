@@ -1,10 +1,5 @@
 /* SubstackFront - Retro Typewriter Style */
 
-/* Hide page until mode check completes - prevents flash before redirect */
-html.loading-mode body {
-  display: none !important;
-}
-
 @import url('https://fonts.googleapis.com/css2?family=Special+Elite&family=Courier+Prime:wght@400;700&display=swap');
 
 :root {
@@ -32,8 +27,10 @@ html.loading-mode body {
 }
 
 html, body {
-  height: 100%;
-  overflow: hidden;
+  height: auto;
+  min-height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 body {
@@ -122,82 +119,12 @@ body {
   to { transform: rotate(360deg); }
 }
 
-/* Toggle Switch */
-.toggle-group {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.toggle-label {
-  font-size: 0.7rem;
-  color: var(--color-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.toggle-switch {
-  position: relative;
-  display: inline-block;
-  width: 36px;
-  height: 18px;
-}
-
-.toggle-switch input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.toggle-slider {
-  position: absolute;
-  cursor: pointer;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: var(--color-border);
-  border: 1px solid var(--color-border-dark);
-  transition: background 0.2s;
-}
-
-.toggle-slider::before {
-  position: absolute;
-  content: "";
-  height: 12px;
-  width: 12px;
-  left: 2px;
-  bottom: 2px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border-dark);
-  transition: transform 0.2s;
-}
-
-.toggle-switch input:checked + .toggle-slider {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
-}
-
-.toggle-switch input:checked + .toggle-slider::before {
-  transform: translateX(18px);
-  border-color: var(--color-accent);
-}
-
-/* Mode Toggle - visual separator */
-.mode-toggle {
-  padding-right: 10px;
-  margin-right: 10px;
-  border-right: 1px solid var(--color-border);
-}
-
 /* Main Content */
 .main {
-  flex: 1;
+  flex: none;
   padding: 12px;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
+  overflow: visible;
+  min-height: auto;
 }
 
 /* Loading State */
@@ -263,14 +190,14 @@ body {
   text-decoration: underline;
 }
 
-/* Post Grid - Fixed card sizes */
+/* Post Grid */
 .post-grid {
   display: grid;
   gap: var(--gap);
   grid-template-columns: repeat(auto-fill, minmax(var(--card-width), 1fr));
   grid-auto-rows: var(--card-height);
-  overflow: hidden;
-  flex: 1;
+  overflow: visible;
+  flex: none;
 }
 
 /* Post Card - Fixed size */
@@ -438,32 +365,6 @@ body {
     padding: 8px;
   }
 
-  .toggle-group {
-    order: -1;
-    width: 100%;
-    justify-content: center;
-  }
-}
-
-/* Scroll Mode - allows scrolling, shows all posts */
-html.scroll-mode,
-body.scroll-mode {
-  height: auto;
-  min-height: 100%;
-  overflow-y: auto !important;
-  overflow-x: hidden;
-}
-
-body.scroll-mode .main {
-  flex: none;
-  overflow: visible;
-  min-height: auto;
-}
-
-body.scroll-mode .post-grid {
-  overflow: visible;
-  flex: none;
-  grid-auto-rows: var(--card-height);
 }
 
 /* Toast Notifications */
