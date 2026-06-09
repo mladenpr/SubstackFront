@@ -21,6 +21,19 @@
   --gap: 8px;
 }
 
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #15130f;
+    --color-surface: #1f1c17;
+    --color-text: #ece7da;
+    --color-text-secondary: #b8b0a0;
+    --color-text-muted: #8a8070;
+    --color-accent: #e06c5a;
+    --color-border: #3a352c;
+    --color-border-dark: #565045;
+  }
+}
+
 *, *::before, *::after {
   margin: 0;
   padding: 0;
@@ -191,7 +204,7 @@ body {
   grid-auto-rows: var(--card-height);
 }
 
-/* Post Card - compact version */
+/* Post Card - a real link styled as a compact card */
 .post-card {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
@@ -201,10 +214,17 @@ body {
   flex-direction: column;
   transition: border-color 0.12s;
   height: var(--card-height);
+  text-decoration: none;
+  color: inherit;
 }
 
 .post-card:hover {
   border-color: var(--color-accent);
+}
+
+.post-card:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
 }
 
 .post-card.read {

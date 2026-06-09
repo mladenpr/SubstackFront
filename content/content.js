@@ -1,121 +1,23 @@
 // SubstackFront - Content Script
-// Extracts post data from Substack inbox and sends to background worker
+// Extracts post data from Substack inbox and sends to background worker.
+// Only injected on substack.com itself (see manifest matches) - the reader2
+// inbox UI doesn't exist on publication subdomains.
 
 (function() {
   'use strict';
 
-  // Only run on substack.com
-  if (!window.location.hostname.includes('substack.com')) {
-    return;
-  }
+  const { parseRelativeDate, isValidArticleUrl, normalizeArticleUrl } = globalThis.SubstackShared;
 
   console.log('[SubstackFront] Content script loaded on:', window.location.href);
-
-  /**
-   * Parse date string - handles relative times and absolute dates
-   */
-  function parseRelativeDate(dateStr) {
-    if (!dateStr) return null;
-
-    const cleaned = dateStr.trim().toLowerCase();
-    const now = new Date();
-
-    // Handle relative times: "2h ago", "5m ago", "30s ago"
-    const relativeMatch = cleaned.match(/^(\d+)\s*(s|m|h|d)\s*ago$/i);
-    if (relativeMatch) {
-      const value = parseInt(relativeMatch[1], 10);
-      const unit = relativeMatch[2].toLowerCase();
-      const date = new Date(now);
-      if (unit === 's') date.setSeconds(date.getSeconds() - value);
-      else if (unit === 'm') date.setMinutes(date.getMinutes() - value);
-      else if (unit === 'h') date.setHours(date.getHours() - value);
-      else if (unit === 'd') date.setDate(date.getDate() - value);
-      return date.toISOString();
-    }
-
-    // Handle "yesterday"
-    if (cleaned === 'yesterday') {
-      const date = new Date(now);
-      date.setDate(date.getDate() - 1);
-      return date.toISOString();
-    }
-
-    // Handle "today"
-    if (cleaned === 'today') {
-      return now.toISOString();
-    }
-
-    // Handle time-only format like "11:37 PM" or "3:45 AM" (means today)
-    const timeMatch = dateStr.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
-    if (timeMatch) {
-      let hours = parseInt(timeMatch[1], 10);
-      const minutes = parseInt(timeMatch[2], 10);
-      const period = timeMatch[3].toUpperCase();
-
-      // Convert to 24-hour format
-      if (period === 'PM' && hours !== 12) hours += 12;
-      if (period === 'AM' && hours === 12) hours = 0;
-
-      const date = new Date(now);
-      date.setHours(hours, minutes, 0, 0);
-      return date.toISOString();
-    }
-
-    // Handle "X hours ago", "X minutes ago", "X days ago"
-    const longRelativeMatch = cleaned.match(/^(\d+)\s*(second|minute|hour|day)s?\s*ago$/i);
-    if (longRelativeMatch) {
-      const value = parseInt(longRelativeMatch[1], 10);
-      const unit = longRelativeMatch[2].toLowerCase();
-      const date = new Date(now);
-      if (unit === 'second') date.setSeconds(date.getSeconds() - value);
-      else if (unit === 'minute') date.setMinutes(date.getMinutes() - value);
-      else if (unit === 'hour') date.setHours(date.getHours() - value);
-      else if (unit === 'day') date.setDate(date.getDate() - value);
-      return date.toISOString();
-    }
-
-    // Try parsing as "Mon DD" format (e.g., "Jan 10")
-    const currentYear = now.getFullYear();
-    const parsed = new Date(`${dateStr.trim()}, ${currentYear}`);
-    if (!isNaN(parsed.getTime())) {
-      // If the date is in the future, it's probably from last year
-      if (parsed > now) {
-        parsed.setFullYear(currentYear - 1);
-      }
-      return parsed.toISOString();
-    }
-
-    return null;
-  }
-
-  /**
-   * Check if a URL is a valid article URL (not a comment or other non-article)
-   */
-  function isValidArticleUrl(url) {
-    if (!url) return false;
-    // Must contain /p/ for posts
-    if (!url.includes('/p/')) return false;
-    // Exclude comments - check various patterns
-    if (url.includes('/comments')) return false;
-    if (url.includes('/comment/')) return false;
-    if (url.includes('/comment?')) return false;
-    if (url.endsWith('/comment')) return false;
-    // Exclude other non-article patterns
-    if (url.includes('/subscribe') || url.includes('/about') || url.includes('/archive')) return false;
-    // Exclude URLs with query params that indicate non-article views
-    if (url.includes('?action=') || url.includes('&action=')) return false;
-    // Exclude discussion/thread URLs
-    if (url.includes('/discussion')) return false;
-    return true;
-  }
 
   /**
    * Extract post data from a reader2-inbox-post element
    */
   function extractPostFromElement(postLink) {
     try {
-      // The post link itself contains the URL
-      const url = postLink.href;
+      // The post link itself contains the URL; strip tracking params so the
+      // same article always dedupes to one stored post
+      const url = normalizeArticleUrl(postLink.href);
       if (!isValidArticleUrl(url)) return null;
 
       // Title: .reader2-post-title
@@ -180,7 +82,7 @@
       }
 
       // Check if unread (has unread dot)
-      const unreadDot = postLink.querySelector('.reader2-unread-dot, .unreadDot-O7Wu_7');
+      const unreadDot = postLink.querySelector('.reader2-unread-dot, [class*="unreadDot"]');
       const isRead = !unreadDot;
 
       // Generate unique ID from URL

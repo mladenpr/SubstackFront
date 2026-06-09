@@ -3,6 +3,8 @@
 (function() {
   'use strict';
 
+  const { buildPostCard } = globalThis.SubstackShared;
+
   // DOM Elements
   const loadingEl = document.getElementById('loading');
   const emptyStateEl = document.getElementById('empty-state');
@@ -44,84 +46,6 @@
   }
 
   /**
-   * Format relative date (compact format for popup)
-   */
-  function formatRelativeDate(dateString) {
-    if (!dateString) return '';
-
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now - date;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m`;
-    if (diffHours < 24) return `${diffHours}h`;
-    if (diffDays < 7) return `${diffDays}d`;
-
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  }
-
-  /**
-   * Get first letter for placeholder
-   */
-  function getInitial(text) {
-    return (text || 'S').charAt(0).toUpperCase();
-  }
-
-  /**
-   * Escape HTML to prevent XSS
-   */
-  function escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-  }
-
-  /**
-   * Create post card HTML (simplified for popup - no subtitle)
-   */
-  function createPostCard(post) {
-    const card = document.createElement('article');
-    card.className = `post-card${post.isRead ? ' read' : ''}`;
-    card.dataset.url = post.url;
-
-    const imageHtml = post.coverImage
-      ? `<img class="post-image" src="${post.coverImage}" alt="" loading="lazy">`
-      : `<div class="post-image-placeholder">${getInitial(post.publication)}</div>`;
-
-    const logoHtml = post.publicationLogo
-      ? `<img class="publication-logo" src="${post.publicationLogo}" alt="">`
-      : '';
-
-    card.innerHTML = `
-      ${imageHtml}
-      <div class="post-content">
-        <div class="post-publication">
-          ${logoHtml}
-          <span class="publication-name">${escapeHtml(post.publication)}</span>
-        </div>
-        <h2 class="post-title">${escapeHtml(post.title)}</h2>
-        <div class="post-meta">
-          <span class="post-date">${formatRelativeDate(post.publishedAt)}</span>
-          ${!post.isRead ? '<span class="unread-dot" title="Unread"></span>' : ''}
-        </div>
-      </div>
-    `;
-
-    // Click handler - opens in new tab
-    card.addEventListener('click', () => {
-      markAsRead(post.url);
-      chrome.tabs.create({ url: post.url });
-    });
-
-    return card;
-  }
-
-  /**
    * Render posts to grid (all posts, scrollable)
    */
   function renderPosts(posts) {
@@ -137,7 +61,10 @@
     postGridEl.classList.remove('hidden');
 
     posts.forEach((post) => {
-      const card = createPostCard(post);
+      const card = buildPostCard(post, {
+        compact: true,
+        onOpen: (p) => markAsRead(p.url)
+      });
       postGridEl.appendChild(card);
     });
   }
@@ -170,6 +97,7 @@
       console.error('[SubstackFront Popup] Error loading posts:', error);
       loadingEl.classList.add('hidden');
       emptyStateEl.classList.remove('hidden');
+      showToast('Could not load posts: ' + error.message, 'error');
     }
   }
 

@@ -3,11 +3,16 @@
 (function() {
   'use strict';
 
+  const { buildPostCard } = globalThis.SubstackShared;
+
   // DOM Elements
   const loadingEl = document.getElementById('loading');
   const emptyStateEl = document.getElementById('empty-state');
+  const noResultsEl = document.getElementById('no-results');
   const postGridEl = document.getElementById('post-grid');
   const publicationFilterEl = document.getElementById('publication-filter');
+  const searchInputEl = document.getElementById('search-input');
+  const unreadOnlyEl = document.getElementById('unread-only');
   const refreshBtnEl = document.getElementById('refresh-btn');
   const statsEl = document.getElementById('stats');
   const toastEl = document.getElementById('toast');
@@ -16,6 +21,8 @@
   // State
   let allPosts = [];
   let currentFilter = '';
+  let searchQuery = '';
+  let unreadOnly = false;
   let toastTimeout = null;
 
   /**
@@ -50,88 +57,6 @@
   }
 
   /**
-   * Format relative date
-   */
-  function formatRelativeDate(dateString) {
-    if (!dateString) return '';
-
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now - date;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
-
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric'
-    });
-  }
-
-  /**
-   * Get first letter for placeholder
-   */
-  function getInitial(text) {
-    return (text || 'S').charAt(0).toUpperCase();
-  }
-
-  /**
-   * Create post card HTML
-   */
-  function createPostCard(post) {
-    const card = document.createElement('article');
-    card.className = `post-card${post.isRead ? ' read' : ''}`;
-    card.dataset.url = post.url;
-
-    const imageHtml = post.coverImage
-      ? `<img class="post-image" src="${post.coverImage}" alt="" loading="lazy">`
-      : `<div class="post-image-placeholder">${getInitial(post.publication)}</div>`;
-
-    const logoHtml = post.publicationLogo
-      ? `<img class="publication-logo" src="${post.publicationLogo}" alt="">`
-      : '';
-
-    card.innerHTML = `
-      ${imageHtml}
-      <div class="post-content">
-        <div class="post-publication">
-          ${logoHtml}
-          <span class="publication-name">${escapeHtml(post.publication)}</span>
-        </div>
-        <h2 class="post-title">${escapeHtml(post.title)}</h2>
-        ${post.subtitle ? `<p class="post-subtitle">${escapeHtml(post.subtitle)}</p>` : ''}
-        <div class="post-meta">
-          <span class="post-date">${formatRelativeDate(post.publishedAt)}</span>
-          ${!post.isRead ? '<span class="unread-dot" title="Unread"></span>' : ''}
-        </div>
-      </div>
-    `;
-
-    // Click handler
-    card.addEventListener('click', () => {
-      markAsRead(post.url);
-      window.open(post.url, '_blank');
-    });
-
-    return card;
-  }
-
-  /**
-   * Escape HTML to prevent XSS
-   */
-  function escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-  }
-
-  /**
    * Render posts to grid
    */
   function renderPosts(posts) {
@@ -139,15 +64,29 @@
 
     if (posts.length === 0) {
       postGridEl.classList.add('hidden');
-      emptyStateEl.classList.remove('hidden');
+      // Distinguish "nothing collected yet" from "filters match nothing"
+      if (allPosts.length === 0) {
+        emptyStateEl.classList.remove('hidden');
+        noResultsEl.classList.add('hidden');
+      } else {
+        noResultsEl.classList.remove('hidden');
+        emptyStateEl.classList.add('hidden');
+      }
       return;
     }
 
     emptyStateEl.classList.add('hidden');
+    noResultsEl.classList.add('hidden');
     postGridEl.classList.remove('hidden');
 
-    posts.forEach((post) => {
-      const card = createPostCard(post);
+    posts.forEach((post, index) => {
+      const card = buildPostCard(post, {
+        onOpen: (p) => markAsRead(p.url)
+      });
+      // Newest post gets the magazine "front page" slot
+      if (index === 0) {
+        card.classList.add('featured');
+      }
       postGridEl.appendChild(card);
     });
   }
@@ -169,6 +108,14 @@
       option.textContent = pub;
       publicationFilterEl.appendChild(option);
     });
+
+    // Keep the current selection if it still exists
+    if (currentFilter && publications.includes(currentFilter)) {
+      publicationFilterEl.value = currentFilter;
+    } else {
+      currentFilter = '';
+      publicationFilterEl.value = '';
+    }
   }
 
   /**
@@ -183,13 +130,27 @@
   }
 
   /**
-   * Filter posts
+   * Apply publication filter, unread toggle, and search query
    */
   function filterPosts() {
     let filtered = allPosts;
 
     if (currentFilter) {
-      filtered = allPosts.filter(p => p.publication === currentFilter);
+      filtered = filtered.filter(p => p.publication === currentFilter);
+    }
+
+    if (unreadOnly) {
+      filtered = filtered.filter(p => !p.isRead);
+    }
+
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(p =>
+        (p.title || '').toLowerCase().includes(query) ||
+        (p.subtitle || '').toLowerCase().includes(query) ||
+        (p.publication || '').toLowerCase().includes(query) ||
+        (p.author || '').toLowerCase().includes(query)
+      );
     }
 
     renderPosts(filtered);
@@ -216,6 +177,7 @@
       console.error('[SubstackFront] Error loading posts:', error);
       loadingEl.classList.add('hidden');
       emptyStateEl.classList.remove('hidden');
+      showToast('Could not load posts: ' + error.message, 'error');
     }
   }
 
@@ -288,6 +250,16 @@
   // Event Listeners
   publicationFilterEl.addEventListener('change', (e) => {
     currentFilter = e.target.value;
+    filterPosts();
+  });
+
+  searchInputEl.addEventListener('input', (e) => {
+    searchQuery = e.target.value.trim();
+    filterPosts();
+  });
+
+  unreadOnlyEl.addEventListener('change', (e) => {
+    unreadOnly = e.target.checked;
     filterPosts();
   });
 

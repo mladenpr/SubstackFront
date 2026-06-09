@@ -1,15 +1,17 @@
 {
   "manifest_version": 3,
   "name": "Substack Front",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "A magazine-style front page for your Substack subscriptions",
 
   "permissions": [
-    "storage"
+    "storage",
+    "alarms"
   ],
 
   "host_permissions": [
-    "https://*.substack.com/*"
+    "https://substack.com/*",
+    "https://www.substack.com/*"
   ],
 
   "action": {
@@ -28,8 +30,8 @@
 
   "content_scripts": [
     {
-      "matches": ["https://*.substack.com/*"],
-      "js": ["content/content.js"],
+      "matches": ["https://substack.com/*", "https://www.substack.com/*"],
+      "js": ["shared/utils.js", "content/content.js"],
       "run_at": "document_idle"
     }
   ],

@@ -11,7 +11,12 @@
     <div class="header-content">
       <h1 class="logo">SubstackFront</h1>
       <div class="header-actions">
-        <select id="publication-filter" class="filter-select">
+        <input id="search-input" class="search-input" type="search" placeholder="Search posts…" aria-label="Search posts">
+        <label class="unread-toggle" title="Show unread posts only">
+          <input type="checkbox" id="unread-only">
+          Unread only
+        </label>
+        <select id="publication-filter" class="filter-select" aria-label="Filter by publication">
           <option value="">All Publications</option>
         </select>
         <button id="refresh-btn" class="btn btn-secondary" title="Visit Substack to refresh">
@@ -32,7 +37,7 @@
       <p>Loading your feed...</p>
     </div>
 
-    <!-- Empty State -->
+    <!-- Empty State (no posts collected yet) -->
     <div id="empty-state" class="empty-state hidden">
       <div class="empty-icon">
         <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -42,6 +47,12 @@
       </div>
       <h2>No posts yet</h2>
       <p>Visit <a href="https://substack.com/inbox" target="_blank">your Substack inbox</a> to start collecting posts.</p>
+    </div>
+
+    <!-- No Results State (posts exist, but filters match nothing) -->
+    <div id="no-results" class="empty-state hidden">
+      <h2>No matching posts</h2>
+      <p>Try clearing the search or filters.</p>
     </div>
 
     <!-- Post Grid -->
@@ -57,6 +68,7 @@
     <span class="toast-message"></span>
   </div>
 
+  <script src="../shared/utils.js"></script>
   <script src="newtab.js"></script>
 </body>
 </html>

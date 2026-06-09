@@ -18,6 +18,19 @@
   --gap: 10px;
 }
 
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #15130f;
+    --color-surface: #1f1c17;
+    --color-text: #ece7da;
+    --color-text-secondary: #b8b0a0;
+    --color-text-muted: #8a8070;
+    --color-accent: #e06c5a;
+    --color-border: #3a352c;
+    --color-border-dark: #565045;
+  }
+}
+
 *, *::before, *::after {
   margin: 0;
   padding: 0;
@@ -63,6 +76,36 @@ body {
   display: flex;
   gap: 10px;
   align-items: center;
+}
+
+.search-input {
+  padding: 5px 10px;
+  border: 1px solid var(--color-border-dark);
+  background: var(--color-surface);
+  font-family: var(--font-main);
+  font-size: 0.75rem;
+  color: var(--color-text);
+  width: 180px;
+}
+
+.search-input:focus {
+  outline: 1px solid var(--color-accent);
+}
+
+.unread-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.unread-toggle input {
+  accent-color: var(--color-accent);
+  cursor: pointer;
 }
 
 .filter-select {
@@ -195,7 +238,7 @@ body {
   flex: none;
 }
 
-/* Post Card - Fixed size */
+/* Post Card - a real link styled as a fixed-size card */
 .post-card {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
@@ -205,10 +248,45 @@ body {
   flex-direction: column;
   transition: border-color 0.12s;
   height: var(--card-height);
+  text-decoration: none;
+  color: inherit;
 }
 
 .post-card:hover {
   border-color: var(--color-accent);
+}
+
+.post-card:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+/* Featured slot: newest post spans 2x2 like a magazine front page */
+.post-card.featured {
+  grid-column: span 2;
+  grid-row: span 2;
+  height: auto;
+}
+
+.post-card.featured .post-image,
+.post-card.featured .post-image-placeholder {
+  height: auto;
+  flex: 1;
+  min-height: 120px;
+}
+
+.post-card.featured .post-content {
+  flex: none;
+}
+
+.post-card.featured .post-title {
+  font-size: 1.05rem;
+  -webkit-line-clamp: 3;
+}
+
+.post-card.featured .post-subtitle {
+  font-size: 0.8rem;
+  -webkit-line-clamp: 2;
 }
 
 .post-card.read {
@@ -357,6 +435,32 @@ body {
     padding: 8px;
   }
 
+  .search-input {
+    width: 120px;
+  }
+
+  /* Not enough columns for a 2x2 featured slot */
+  .post-card.featured {
+    grid-column: auto;
+    grid-row: auto;
+    height: var(--card-height);
+  }
+
+  .post-card.featured .post-image,
+  .post-card.featured .post-image-placeholder {
+    flex-shrink: 0;
+    height: 120px;
+  }
+
+  .post-card.featured .post-title {
+    font-size: 0.8rem;
+    -webkit-line-clamp: 2;
+  }
+
+  .post-card.featured .post-subtitle {
+    font-size: 0.7rem;
+    -webkit-line-clamp: 1;
+  }
 }
 
 /* Toast Notifications */
