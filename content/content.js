@@ -6,7 +6,25 @@
 (function() {
   'use strict';
 
-  const { parseRelativeDate, isValidArticleUrl, normalizeArticleUrl } = globalThis.SubstackShared;
+  const { parseRelativeDate, isValidArticleUrl, normalizeArticleUrl, parseCount } = globalThis.SubstackShared;
+
+  /**
+   * Best-effort extraction of the like/reaction count shown on an inbox item.
+   * Substack doesn't always render one; returns null when absent so the UI
+   * can fall back gracefully.
+   */
+  function extractLikes(postLink) {
+    const candidates = postLink.querySelectorAll(
+      '[class*="reaction"], [class*="like"], [class*="ufi"] [class*="label"]'
+    );
+    for (const el of candidates) {
+      // Only trust elements whose entire text is a count ("24", "1.2K");
+      // parseCount rejects anything else (e.g. the word "Like")
+      const count = parseCount(el.textContent);
+      if (count !== null) return count;
+    }
+    return null;
+  }
 
   console.log('[SubstackFront] Content script loaded on:', window.location.href);
 
@@ -85,6 +103,9 @@
       const unreadDot = postLink.querySelector('.reader2-unread-dot, [class*="unreadDot"]');
       const isRead = !unreadDot;
 
+      // Like/reaction count, when the inbox item shows one
+      const likes = extractLikes(postLink);
+
       // Generate unique ID from URL
       const id = url.replace(/[^a-zA-Z0-9]/g, '_');
 
@@ -99,6 +120,7 @@
         url,
         publishedAt,
         isRead,
+        likes,
         extractedAt: new Date().toISOString()
       };
     } catch (error) {

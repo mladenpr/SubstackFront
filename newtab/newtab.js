@@ -11,6 +11,7 @@
   const noResultsEl = document.getElementById('no-results');
   const postGridEl = document.getElementById('post-grid');
   const publicationFilterEl = document.getElementById('publication-filter');
+  const sortSelectEl = document.getElementById('sort-select');
   const searchInputEl = document.getElementById('search-input');
   const unreadOnlyEl = document.getElementById('unread-only');
   const refreshBtnEl = document.getElementById('refresh-btn');
@@ -21,6 +22,7 @@
   // State
   let allPosts = [];
   let currentFilter = '';
+  let currentSort = 'newest';
   let searchQuery = '';
   let unreadOnly = false;
   let toastTimeout = null;
@@ -79,16 +81,27 @@
     noResultsEl.classList.add('hidden');
     postGridEl.classList.remove('hidden');
 
-    posts.forEach((post, index) => {
+    posts.forEach((post) => {
       const card = buildPostCard(post, {
         onOpen: (p) => markAsRead(p.url)
       });
-      // Newest post gets the magazine "front page" slot
-      if (index === 0) {
-        card.classList.add('featured');
-      }
       postGridEl.appendChild(card);
     });
+  }
+
+  /**
+   * Enable the "Most liked" option only when we actually have like counts;
+   * Substack's inbox doesn't always render them
+   */
+  function updateSortOptions(posts) {
+    const likesOption = sortSelectEl.querySelector('option[value="likes"]');
+    const hasLikes = posts.some(p => typeof p.likes === 'number');
+    likesOption.disabled = !hasLikes;
+    likesOption.title = hasLikes ? '' : 'No like counts collected yet';
+    if (!hasLikes && currentSort === 'likes') {
+      currentSort = 'newest';
+      sortSelectEl.value = 'newest';
+    }
   }
 
   /**
@@ -130,7 +143,41 @@
   }
 
   /**
-   * Apply publication filter, unread toggle, and search query
+   * Sort a copy of the posts by the current sort mode.
+   * Posts without the relevant data go last; ties fall back to newest first.
+   */
+  function sortPosts(posts) {
+    const dateValue = (p) => {
+      const time = new Date(p.publishedAt || p.extractedAt || 0).getTime();
+      return isNaN(time) ? 0 : time;
+    };
+    const sorted = [...posts];
+
+    switch (currentSort) {
+      case 'oldest':
+        sorted.sort((a, b) => dateValue(a) - dateValue(b));
+        break;
+      case 'likes':
+        sorted.sort((a, b) =>
+          ((typeof b.likes === 'number' ? b.likes : -1) - (typeof a.likes === 'number' ? a.likes : -1)) ||
+          (dateValue(b) - dateValue(a))
+        );
+        break;
+      case 'publication':
+        sorted.sort((a, b) =>
+          (a.publication || '').localeCompare(b.publication || '') ||
+          (dateValue(b) - dateValue(a))
+        );
+        break;
+      default: // newest
+        sorted.sort((a, b) => dateValue(b) - dateValue(a));
+    }
+
+    return sorted;
+  }
+
+  /**
+   * Apply publication filter, unread toggle, search query, and sort
    */
   function filterPosts() {
     let filtered = allPosts;
@@ -153,7 +200,7 @@
       );
     }
 
-    renderPosts(filtered);
+    renderPosts(sortPosts(filtered));
   }
 
   /**
@@ -168,6 +215,7 @@
 
         loadingEl.classList.add('hidden');
         updatePublicationFilter(allPosts);
+        updateSortOptions(allPosts);
         updateStats(allPosts);
         filterPosts();
       } else {
@@ -253,6 +301,11 @@
     filterPosts();
   });
 
+  sortSelectEl.addEventListener('change', (e) => {
+    currentSort = e.target.value;
+    filterPosts();
+  });
+
   searchInputEl.addEventListener('input', (e) => {
     searchQuery = e.target.value.trim();
     filterPosts();
@@ -270,6 +323,7 @@
     if (areaName === 'local' && changes.posts) {
       allPosts = changes.posts.newValue || [];
       updatePublicationFilter(allPosts);
+      updateSortOptions(allPosts);
       updateStats(allPosts);
       filterPosts();
     }

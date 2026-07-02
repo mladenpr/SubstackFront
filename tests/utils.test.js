@@ -9,7 +9,9 @@ const {
   isValidArticleUrl,
   parseRelativeDate,
   formatRelativeDate,
-  getInitial
+  getInitial,
+  parseCount,
+  formatCount
 } = require('../shared/utils.js');
 
 // Allow small clock drift between "now" inside the function and the assertion
@@ -107,6 +109,30 @@ test('formatRelativeDate formats recent times', () => {
 
   assert.strictEqual(formatRelativeDate(new Date().toISOString()), 'Just now');
   assert.strictEqual(formatRelativeDate(null), '');
+});
+
+test('parseCount parses plain, comma, and abbreviated counts', () => {
+  assert.strictEqual(parseCount('24'), 24);
+  assert.strictEqual(parseCount(' 1,204 '), 1204);
+  assert.strictEqual(parseCount('1.2K'), 1200);
+  assert.strictEqual(parseCount('3k'), 3000);
+  assert.strictEqual(parseCount('1.5M'), 1500000);
+});
+
+test('parseCount rejects non-count text', () => {
+  assert.strictEqual(parseCount('Like'), null);
+  assert.strictEqual(parseCount('24 comments'), null);
+  assert.strictEqual(parseCount(''), null);
+  assert.strictEqual(parseCount(null), null);
+});
+
+test('formatCount abbreviates large numbers', () => {
+  assert.strictEqual(formatCount(24), '24');
+  assert.strictEqual(formatCount(999), '999');
+  assert.strictEqual(formatCount(1000), '1K');
+  assert.strictEqual(formatCount(1234), '1.2K');
+  assert.strictEqual(formatCount(1500000), '1.5M');
+  assert.strictEqual(formatCount(null), '');
 });
 
 test('getInitial returns uppercase first letter with fallback', () => {

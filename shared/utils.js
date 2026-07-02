@@ -159,6 +159,32 @@
   }
 
   /**
+   * Parse a UI count like "24", "1,204" or "1.2K" into a number.
+   * Returns null for anything that isn't purely a count.
+   */
+  function parseCount(text) {
+    if (text === null || text === undefined) return null;
+    const match = String(text).trim().match(/^([\d,]+(?:\.\d+)?)\s*([kKmM])?$/);
+    if (!match) return null;
+    const num = parseFloat(match[1].replace(/,/g, ''));
+    if (isNaN(num)) return null;
+    const multiplier = match[2]
+      ? (match[2].toLowerCase() === 'k' ? 1000 : 1000000)
+      : 1;
+    return Math.round(num * multiplier);
+  }
+
+  /**
+   * Format a count for display: 1234 -> "1.2K"
+   */
+  function formatCount(count) {
+    if (typeof count !== 'number' || isNaN(count)) return '';
+    if (count >= 1000000) return `${(count / 1000000).toFixed(1).replace(/\.0$/, '')}M`;
+    if (count >= 1000) return `${(count / 1000).toFixed(1).replace(/\.0$/, '')}K`;
+    return String(count);
+  }
+
+  /**
    * Build a post card as a real link (keyboard focusable, middle-click works).
    * Built with DOM APIs so post data never goes through innerHTML.
    *
@@ -225,6 +251,13 @@
     date.className = 'post-date';
     date.textContent = formatRelativeDate(post.publishedAt, compact);
     meta.appendChild(date);
+    if (typeof post.likes === 'number') {
+      const likes = document.createElement('span');
+      likes.className = 'post-likes';
+      likes.title = `${post.likes} likes`;
+      likes.textContent = `♥ ${formatCount(post.likes)}`;
+      meta.appendChild(likes);
+    }
     if (!post.isRead) {
       const dot = document.createElement('span');
       dot.className = 'unread-dot';
@@ -251,6 +284,8 @@
     parseRelativeDate,
     formatRelativeDate,
     getInitial,
+    parseCount,
+    formatCount,
     buildPostCard
   };
 

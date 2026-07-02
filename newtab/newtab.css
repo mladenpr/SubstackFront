@@ -261,34 +261,6 @@ body {
   outline-offset: 1px;
 }
 
-/* Featured slot: newest post spans 2x2 like a magazine front page */
-.post-card.featured {
-  grid-column: span 2;
-  grid-row: span 2;
-  height: auto;
-}
-
-.post-card.featured .post-image,
-.post-card.featured .post-image-placeholder {
-  height: auto;
-  flex: 1;
-  min-height: 120px;
-}
-
-.post-card.featured .post-content {
-  flex: none;
-}
-
-.post-card.featured .post-title {
-  font-size: 1.05rem;
-  -webkit-line-clamp: 3;
-}
-
-.post-card.featured .post-subtitle {
-  font-size: 0.8rem;
-  -webkit-line-clamp: 2;
-}
-
 .post-card.read {
   opacity: 0.5;
 }
@@ -392,6 +364,12 @@ body {
   font-family: var(--font-main);
 }
 
+.post-likes {
+  color: var(--color-text-muted);
+  margin-left: auto;
+  padding-right: 6px;
+}
+
 .unread-dot {
   width: 5px;
   height: 5px;
@@ -437,29 +415,6 @@ body {
 
   .search-input {
     width: 120px;
-  }
-
-  /* Not enough columns for a 2x2 featured slot */
-  .post-card.featured {
-    grid-column: auto;
-    grid-row: auto;
-    height: var(--card-height);
-  }
-
-  .post-card.featured .post-image,
-  .post-card.featured .post-image-placeholder {
-    flex-shrink: 0;
-    height: 120px;
-  }
-
-  .post-card.featured .post-title {
-    font-size: 0.8rem;
-    -webkit-line-clamp: 2;
-  }
-
-  .post-card.featured .post-subtitle {
-    font-size: 0.7rem;
-    -webkit-line-clamp: 1;
   }
 }
 

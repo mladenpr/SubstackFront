@@ -315,6 +315,12 @@ body {
   margin-top: auto;
 }
 
+.post-likes {
+  color: var(--color-text-muted);
+  margin-left: auto;
+  padding-right: 4px;
+}
+
 .unread-dot {
   width: 4px;
   height: 4px;

@@ -64,9 +64,11 @@ async function savePostsUnlocked(newPosts) {
     if (existing) {
       // Update existing post. A post is read if either side says so:
       // marked read in the extension, or read on Substack itself.
+      // Likes aren't always rendered, so keep the last known count.
       postMap.set(key, {
         ...post,
-        isRead: existing.isRead || post.isRead
+        isRead: existing.isRead || post.isRead,
+        likes: post.likes ?? existing.likes ?? null
       });
       updatedCount++;
     } else {

@@ -2,7 +2,7 @@
 
 A Chrome extension that gives your Substack subscriptions a magazine-style front page.
 
-Posts are collected from your [Substack inbox](https://substack.com/inbox) as you browse (or via the Refresh button, which loads the inbox in a hidden background tab), cached locally, and displayed as a tiled grid of cards — newest post featured up top, with search, an unread-only toggle, and a per-publication filter.
+Posts are collected from your [Substack inbox](https://substack.com/inbox) as you browse (or via the Refresh button, which loads the inbox in a hidden background tab), cached locally, and displayed as a uniform grid of cards with search, an unread-only toggle, a per-publication filter, and sorting by date, publication, or like count (when Substack's inbox shows one).
 
 ## Install (developer mode)
 

@@ -27,7 +27,7 @@ SubstackFront/
 - **Content Script**: Parses Substack inbox pages (apex `substack.com` only) to extract post data
 - **Background Worker**: Receives posts from content script, dedupes by normalized URL (tracking params stripped), serializes storage writes, stores in chrome.storage.local. The hidden-tab refresh flow keeps its state in `chrome.storage.session` + `chrome.alarms` so it survives service worker restarts.
 - **Popup**: Compact grid; "Tab view" button opens the full magazine page
-- **New Tab Page**: Full magazine grid with featured post, search, unread-only toggle, and publication filter
+- **New Tab Page**: Full magazine grid (uniform tiles) with search, unread-only toggle, publication filter, and sorting (newest/oldest/most liked/publication)
 
 ## Development
 
@@ -61,4 +61,4 @@ Manual testing:
 
 ## Data Model
 
-Posts are stored with: `id`, `title`, `subtitle`, `publication`, `publicationLogo`, `author`, `coverImage`, `url` (normalized, no query/hash), `publishedAt`, `isRead`, `extractedAt`
+Posts are stored with: `id`, `title`, `subtitle`, `publication`, `publicationLogo`, `author`, `coverImage`, `url` (normalized, no query/hash), `publishedAt`, `isRead`, `likes` (nullable - only when the inbox renders a count), `extractedAt`
