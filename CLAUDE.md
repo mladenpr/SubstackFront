@@ -19,6 +19,10 @@ SubstackFront/
 │   ├── newtab.js
 │   └── newtab.css
 ├── icons/                # Toolbar icons + appicon-source.png (App Store artwork)
+├── scripts/              # Packaging
+│   ├── shipping-files.txt      # Single source of truth for what ships
+│   ├── list-shipping-files.sh  # Resolves it; both packagers call this
+│   └── build-chrome.sh         # Chrome Web Store zip -> dist/
 └── safari/               # Safari port (see safari/README.md)
     ├── manifest.overrides.json  # Safari-only manifest keys
     ├── appicon/                 # Generated app icon set (committed)
@@ -36,11 +40,14 @@ SubstackFront/
 ## Development
 
 ```bash
-# Chrome:
+# Chrome (development):
 # 1. Go to chrome://extensions
 # 2. Enable "Developer mode"
 # 3. Click "Load unpacked"
 # 4. Select this directory
+
+# Chrome (Web Store package):
+./scripts/build-chrome.sh          # -> dist/substack-front-<version>.zip
 
 # Safari (macOS + Xcode required):
 ./safari/build.sh --bundle-identifier com.yourcompany.substackfront
@@ -68,6 +75,7 @@ tests/
 ├── helpers/extension-stub.js  # loads background.js into a VM with a stub API
 ├── background.test.js         # message handling, storage, refresh flow
 ├── manifest.test.js           # Chrome + generated Safari manifests, build.sh
+├── packaging.test.js          # shipping-file list, Chrome zip layout
 ├── platform.test.js           # isIOS() behaviour and the popup/newtab copies
 ├── appicon.test.js            # icon sizes match Contents.json, none have alpha
 └── syntax.test.js             # every shipped script parses and keeps its guards
@@ -126,13 +134,31 @@ fork a source file into `safari/` — put the difference in
   `escapeHtml`/`formatRelativeDate` already are — and pinned together by
   `tests/platform.test.js`.
 
+## Packaging
+
+The two stores want different things — Chrome takes a zip whose top level is
+`manifest.json`, Safari takes an Xcode project — but both package the same
+files. `scripts/shipping-files.txt` is the only place that list exists;
+`scripts/build-chrome.sh` and `safari/build.sh` both resolve it through
+`scripts/list-shipping-files.sh`, so the two builds cannot drift. A pattern that
+matches nothing fails the build rather than silently shipping less.
+
+Neither artifact is committed. `dist/` and `safari/build/` are git-ignored, and
+CI attaches the Chrome zip to every green run as an artifact.
+
+Note `icons/` is listed file by file rather than with a glob: it also holds
+`appicon-source.png`, which is App Store artwork for the Mac wrapper app and
+must not end up inside the shipped extension.
+
 ## Releasing
 
 `manifest.json`'s `version` is the single source of truth. `safari/build.sh`
 copies it into the Xcode project's `MARKETING_VERSION`, so bumping it there is
 enough for both builds; pass `--build-number` for App Store uploads, which need
 a fresh one each time. Safari ships through the App Store inside the wrapper
-app — see the release checklist in `safari/README.md`.
+app — see the release checklist in `safari/README.md`. Chrome takes
+`dist/substack-front-<version>.zip` from `./scripts/build-chrome.sh`, uploaded
+at the Web Store developer dashboard.
 
 ## Data Model
 

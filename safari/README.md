@@ -11,6 +11,9 @@ Safari-specific pieces live in this directory:
 | `appicon/` | Generated app icon set, copied into the Xcode project |
 | `make-appicon.py` | Regenerates that set from `icons/appicon-source.png` |
 
+The extension files themselves come from `scripts/shipping-files.txt`, shared
+with the Chrome packager, so both stores ship exactly the same code.
+
 Safari cannot load a bare extension folder. Every Safari web extension ships
 *inside* a native app wrapper, so the build produces an Xcode project containing
 a small host app plus this extension.

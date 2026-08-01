@@ -36,9 +36,6 @@ PLATFORM_FLAGS=()
 RUN_CONVERTER=1
 OPEN_XCODE=0
 
-# Files and directories copied verbatim from the repo root into the payload.
-SHARED_PATHS=(background content newtab popup icons)
-
 usage() {
   # Print the header comment block, minus the shebang.
   awk 'NR == 1 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "${BASH_SOURCE[0]}"
@@ -64,20 +61,20 @@ if [[ -z "$PYTHON" ]]; then
   exit 1
 fi
 
+# The file list is shared with the Chrome packager (scripts/shipping-files.txt)
+# so the two builds cannot disagree about what ships.
 echo "==> Assembling Safari payload in $PAYLOAD_DIR"
 rm -rf "$PAYLOAD_DIR"
 mkdir -p "$PAYLOAD_DIR"
 
-for path in "${SHARED_PATHS[@]}"; do
-  if [[ ! -e "$REPO_ROOT/$path" ]]; then
-    echo "error: missing $path in $REPO_ROOT" >&2
-    exit 1
-  fi
-  cp -R "$REPO_ROOT/$path" "$PAYLOAD_DIR/"
-done
+payload_files=0
+while IFS= read -r relative; do
+  mkdir -p "$PAYLOAD_DIR/$(dirname "$relative")"
+  cp "$REPO_ROOT/$relative" "$PAYLOAD_DIR/$relative"
+  payload_files=$((payload_files + 1))
+done < <("$REPO_ROOT/scripts/list-shipping-files.sh")
 
-# Drop anything that should never ship inside the extension bundle.
-find "$PAYLOAD_DIR" -name '.DS_Store' -delete
+echo "    $payload_files files"
 
 echo "==> Generating manifest.json from manifest.json + manifest.overrides.json"
 "$PYTHON" - "$REPO_ROOT/manifest.json" "$SCRIPT_DIR/manifest.overrides.json" "$PAYLOAD_DIR/manifest.json" <<'PY'
