@@ -295,13 +295,51 @@
     }
   }
 
+  /**
+   * Safari on iOS/iPadOS. Kept in sync with the copy in popup/popup.js -
+   * tests/platform.test.js fails if the two drift apart.
+   */
+  function isIOS() {
+    const ua = navigator.userAgent;
+    if (/iPad|iPhone|iPod/.test(ua)) return true;
+    // iPadOS 13+ reports a desktop Mac user agent; touch points give it away.
+    return /Macintosh/.test(ua) && navigator.maxTouchPoints > 1;
+  }
+
+  /**
+   * Background refresh cannot work on iOS: Safari ignores `active: false` in
+   * tabs.create (18.3+), so the refresh tab is foregrounded instead of loading
+   * quietly. Offer a plain link instead of a button that would misbehave.
+   */
+  function replaceRefreshWithInboxLink() {
+    const link = document.createElement('a');
+    link.className = 'btn btn-secondary';
+    link.href = 'https://substack.com/inbox';
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.title = 'Open your Substack inbox to collect posts';
+    link.innerHTML = `
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+        <polyline points="15 3 21 3 21 9"/>
+        <line x1="10" y1="14" x2="21" y2="3"/>
+      </svg>
+      Open Substack
+    `;
+    refreshBtnEl.replaceWith(link);
+  }
+
   // Event Listeners
   publicationFilterEl.addEventListener('change', (e) => {
     currentFilter = e.target.value;
     filterPosts();
   });
 
-  refreshBtnEl.addEventListener('click', handleRefresh);
+  if (isIOS()) {
+    replaceRefreshWithInboxLink();
+  } else {
+    refreshBtnEl.addEventListener('click', handleRefresh);
+  }
 
   // Listen for storage changes (real-time updates)
   chrome.storage.onChanged.addListener((changes, areaName) => {

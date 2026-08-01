@@ -111,6 +111,11 @@ body {
   animation: spin 1s linear infinite;
 }
 
+/* Anchors styled as buttons - iOS swaps Refresh for an inbox link */
+a.btn {
+  text-decoration: none;
+}
+
 @keyframes spin {
   to { transform: rotate(360deg); }
 }

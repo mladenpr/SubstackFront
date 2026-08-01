@@ -57,14 +57,16 @@ SUBSTACK_TEST_VERBOSE=1 node --test   # show the extension's console output
 ```
 
 Requires Node 20+ and nothing else — the suite uses `node:test`/`node:assert`
-only, and runs in CI on every push and pull request
-(`.github/workflows/ci.yml`).
+only. CI runs it on every push and pull request (`.github/workflows/ci.yml`);
+a separate macOS workflow (`.github/workflows/safari.yml`) runs Apple's
+converter and compiles the generated Xcode project.
 
 ```
 tests/
 ├── helpers/extension-stub.js  # loads background.js into a VM with a stub API
 ├── background.test.js         # message handling, storage, refresh flow
 ├── manifest.test.js           # Chrome + generated Safari manifests, build.sh
+├── platform.test.js           # isIOS() behaviour and the popup/newtab copies
 └── syntax.test.js             # every shipped script parses and keeps its guards
 ```
 
@@ -113,8 +115,13 @@ fork a source file into `safari/` — put the difference in
 - Don't rely on `tabs.onUpdated` alone for sequencing; Safari delivers it
   inconsistently without the `tabs` permission.
 - Add a case to `tests/background.test.js` for anything that behaves
-  differently between the two browsers. CI has no Safari, so the stub is the
-  only thing standing between a Safari-only regression and the App Store.
+  differently between the two browsers. No CI runner loads Safari, so the stub
+  is the only thing standing between a Safari-only regression and the App Store.
+- iOS cannot do background refresh at all (Safari ignores `active: false` in
+  `tabs.create`), so the popup and tab view swap Refresh for a link to the
+  inbox there. `isIOS()` is duplicated in both files — matching how
+  `escapeHtml`/`formatRelativeDate` already are — and pinned together by
+  `tests/platform.test.js`.
 
 ## Data Model
 

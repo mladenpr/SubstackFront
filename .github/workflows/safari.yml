@@ -1,0 +1,87 @@
+name: Safari
+
+# Runs Apple's converter for real and compiles the generated Xcode project.
+# This is the only check that exercises the Safari packaging path - the Linux
+# CI job can validate the payload and the manifest, but not Xcode.
+#
+# macOS runner minutes bill at 10x the Linux rate, so this is scoped to the
+# files that can actually affect the Safari build.
+
+on:
+  push:
+    branches: [main]
+    paths: &safari-paths
+      - 'safari/**'
+      - 'manifest.json'
+      - 'background/**'
+      - 'content/**'
+      - 'newtab/**'
+      - 'popup/**'
+      - 'icons/**'
+      - '.github/workflows/safari.yml'
+  pull_request:
+    paths: *safari-paths
+
+permissions:
+  contents: read
+
+jobs:
+  xcode:
+    name: Convert and build
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          sw_vers
+          xcodebuild -version
+          xcrun --find safari-web-extension-converter
+
+      # Printed unconditionally. If a converter flag in safari/build.sh stops
+      # being supported, the accepted options are right here in the log.
+      - name: Converter options
+        continue-on-error: true
+        run: xcrun safari-web-extension-converter --help
+
+      - name: Convert the extension
+        run: |
+          ./safari/build.sh \
+            --macos-only \
+            --app-name "Substack Front" \
+            --bundle-identifier com.example.substackfront.ci
+
+      - name: Locate the generated project
+        id: project
+        shell: bash
+        run: |
+          set -euo pipefail
+          project="$(find safari/build/xcode -maxdepth 3 -name '*.xcodeproj' -print -quit)"
+          if [[ -z "$project" ]]; then
+            echo "::error::the converter produced no .xcodeproj"
+            find safari/build/xcode -maxdepth 3
+            exit 1
+          fi
+
+          # With --macos-only there is a single scheme, but read it rather than
+          # assuming the converter names it after the app.
+          scheme="$(xcodebuild -list -json -project "$project" \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["project"]["schemes"][0])')"
+
+          echo "project=$project" >> "$GITHUB_OUTPUT"
+          echo "scheme=$scheme" >> "$GITHUB_OUTPUT"
+          echo "Building scheme '$scheme' from $project"
+
+      # No signing: this proves the project configures and compiles, which is
+      # what regresses. Distribution builds still need a real team locally.
+      - name: Build the app and extension
+        run: |
+          xcodebuild build \
+            -project "${{ steps.project.outputs.project }}" \
+            -scheme "${{ steps.project.outputs.scheme }}" \
+            -destination 'platform=macOS' \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_ENTITLEMENTS=""

@@ -109,28 +109,41 @@ It now returns `false` because it always answers synchronously.
 ## iOS / iPadOS caveats
 
 `./safari/build.sh` generates an iOS target too, and the UI is responsive, but
-two things make the **Refresh** button unreliable on iOS:
+background refresh cannot work there:
 
 - `tabs.create({ active: false })` is broken on iOS 18.3+ — the new tab is
   foregrounded regardless, so a refresh visibly yanks the user to
   `substack.com/inbox`.
-- Opening that tab dismisses the popup, so the popup never sees the result. The
-  posts are still saved; reopening the popup shows them.
+- Opening that tab dismisses the popup, so the popup never sees the result.
 
-Passive collection (browse your Substack inbox, posts get captured) works fine
-on iOS. If you ship an iOS build, consider hiding the Refresh button there.
+Both the popup and the tab view therefore **replace Refresh with a plain link to
+the inbox** on iOS rather than offering a button that would misbehave. Tapping
+it lands on Substack, the content script extracts as usual, and the posts are
+there when the user comes back. Passive collection — browse your inbox, posts get
+captured — is unaffected.
+
+The switch is `isIOS()` in `popup/popup.js` and `newtab/newtab.js`. It matches
+iPhone/iPad/iPod user agents, plus the desktop-Mac user agent iPadOS 13+ sends,
+which is distinguished by `navigator.maxTouchPoints`. The two copies are pinned
+together by `tests/platform.test.js`.
 
 ## What CI covers
 
-`.github/workflows/ci.yml` runs `node --test` and shellchecks this build script
-on every push and pull request. That covers the payload assembly, the generated
-manifest, and the background worker's behaviour against a Safari-shaped API stub
-(`tests/helpers/extension-stub.js`).
+Two workflows:
 
-It does **not** cover Safari itself: GitHub's Linux runners have no Safari and no
-Xcode, so the converter step, the Xcode build, and anything DOM-dependent
-(`content/content.js`, the popup, the tab view) are still verified by hand. Run
-`./safari/build.sh` on a Mac before shipping.
+- **`.github/workflows/ci.yml`** (Linux, every push and PR) runs `node --test`
+  and shellchecks this build script. Covers the payload assembly, the generated
+  manifest, and the background worker against a Safari-shaped API stub
+  (`tests/helpers/extension-stub.js`).
+- **`.github/workflows/safari.yml`** (macOS) runs Apple's converter for real and
+  compiles the generated Xcode project unsigned. This is the only check that
+  exercises the packaging path. macOS runner minutes bill at 10x, so it is
+  scoped by `paths` to files that can affect the Safari build.
+
+Neither covers **Safari at runtime**. Nothing on a CI runner loads the extension
+into a browser, so the DOM-dependent code (`content/content.js`, the popup, the
+tab view) and everything in the checklists above are still verified by hand.
+Extraction in particular depends on Substack's markup, which no test here pins.
 
 ## Keeping the two builds in sync
 

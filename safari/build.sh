@@ -143,19 +143,35 @@ echo "==> Running safari-web-extension-converter"
 rm -rf "$PROJECT_DIR"
 mkdir -p "$PROJECT_DIR"
 
+# Apple has changed this tool's options across Xcode releases. Anything not
+# advertised by --help is skipped with a note rather than failing the build;
+# the three flags below it are essential, so they are always passed.
+CONVERTER_HELP="$(xcrun safari-web-extension-converter --help 2>&1 || true)"
+
 CONVERTER_FLAGS=(
   --project-location "$PROJECT_DIR"
   --app-name "$APP_NAME"
   --bundle-identifier "$BUNDLE_ID"
-  --swift
-  --copy-resources
-  --force
-  --no-prompt
 )
+
+add_optional_flag() {
+  if printf '%s' "$CONVERTER_HELP" | grep -q -- "$1"; then
+    CONVERTER_FLAGS+=("$@")
+  else
+    echo "    note: converter does not advertise $1, skipping it"
+  fi
+}
+
+add_optional_flag --swift
+add_optional_flag --copy-resources
+add_optional_flag --force
+add_optional_flag --no-prompt
 if [[ "$OPEN_XCODE" -eq 0 ]]; then
-  CONVERTER_FLAGS+=(--no-open)
+  add_optional_flag --no-open
 fi
-CONVERTER_FLAGS+=("${PLATFORM_FLAGS[@]+"${PLATFORM_FLAGS[@]}"}")
+for platform_flag in "${PLATFORM_FLAGS[@]+"${PLATFORM_FLAGS[@]}"}"; do
+  add_optional_flag "$platform_flag"
+done
 
 xcrun safari-web-extension-converter "$PAYLOAD_DIR" "${CONVERTER_FLAGS[@]}"
 

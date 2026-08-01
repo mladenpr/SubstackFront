@@ -239,8 +239,40 @@
     window.close();
   }
 
+  /**
+   * Safari on iOS/iPadOS. Kept in sync with the copy in newtab/newtab.js -
+   * tests/platform.test.js fails if the two drift apart.
+   */
+  function isIOS() {
+    const ua = navigator.userAgent;
+    if (/iPad|iPhone|iPod/.test(ua)) return true;
+    // iPadOS 13+ reports a desktop Mac user agent; touch points give it away.
+    return /Macintosh/.test(ua) && navigator.maxTouchPoints > 1;
+  }
+
+  /**
+   * Background refresh cannot work on iOS: Safari ignores `active: false` in
+   * tabs.create (18.3+) so the tab is foregrounded, and opening it dismisses
+   * this popup before it can see the result. Offer a plain link instead of a
+   * button that would misbehave.
+   */
+  function replaceRefreshWithInboxLink() {
+    const link = document.createElement('a');
+    link.className = 'btn-text';
+    link.href = 'https://substack.com/inbox';
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.title = 'Open your Substack inbox to collect posts';
+    link.textContent = 'Substack';
+    refreshBtnEl.replaceWith(link);
+  }
+
   // Event Listeners
-  refreshBtnEl.addEventListener('click', handleRefresh);
+  if (isIOS()) {
+    replaceRefreshWithInboxLink();
+  } else {
+    refreshBtnEl.addEventListener('click', handleRefresh);
+  }
   expandBtnEl.addEventListener('click', handleExpand);
 
   // Listen for storage changes (real-time updates)
