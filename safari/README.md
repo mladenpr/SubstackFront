@@ -68,6 +68,60 @@ Run `./safari/build.sh --help` for all options.
 Step 7 is the step people miss. Safari installs extensions **disabled** with no
 host access, so until it is done the popup will just show the empty state.
 
+## Ship it to other people
+
+Unlike Chrome, there is no "upload a zip to a store" path. The extension ships
+inside the wrapper app, so you are publishing a Mac app that happens to contain
+a Safari extension. Two routes, both needing a paid Apple Developer membership:
+
+**Mac App Store** — the equivalent of the Chrome Web Store. Users search for the
+app, install it, and the extension appears in Safari's Extensions settings.
+Goes through App Review. One submission can cover macOS and iPhone/iPad if you
+keep the iOS target.
+
+**Developer ID, outside the App Store** — sign and notarize the app and host the
+download yourself. Since Safari 18.4 users no longer have to turn on *Allow
+Unsigned Extensions* for these, which is what made this route impractical
+before. No review queue, but no discoverability either, and it is macOS-only.
+
+### Release checklist
+
+1. **Register the bundle identifiers** in the developer portal: your app's
+   (`com.yourcompany.substackfront`) and the extension's
+   (`com.yourcompany.substackfront.Extension`).
+2. **Bump the version** in the root `manifest.json`. That is the single source
+   of truth — `build.sh` copies it into the Xcode project's `MARKETING_VERSION`,
+   so the App Store listing and the extension can't disagree.
+3. **Build**, giving App Store Connect a build number it has not seen before:
+   ```bash
+   ./safari/build.sh \
+     --bundle-identifier com.yourcompany.substackfront \
+     --build-number 1
+   ```
+4. **Add app icons.** This is the one blocking gap in this repo — see below.
+5. In Xcode, set your team on **both** targets, then **Product → Archive** and
+   **Distribute App**.
+6. Fill in App Store Connect: description, category, screenshots, support URL,
+   privacy policy URL, and the privacy questionnaire. `PRIVACY.md` in the repo
+   root has the content; it needs to be hosted somewhere public.
+7. Submit for review.
+
+### Two things that will trip you up
+
+**App icons.** The App Store needs a full macOS icon set up to 1024×1024. The
+`icons/` directory here only goes up to 128×128 — enough for the toolbar, not
+for the app. Upscaling 128×128 will look bad and can draw a rejection. You need
+a 1024×1024 source image, then drop the generated set into the app target's
+asset catalog. Nothing in this repo can produce that from what it has.
+
+**App Review needs to see it work.** The extension shows nothing until it has
+extracted posts from a logged-in Substack inbox, and reviewers will not have a
+Substack account with subscriptions. Supply demo account credentials in the
+review notes, or expect a rejection for "we could not evaluate the
+functionality". Also be ready to justify the `substack.com` host permission —
+say plainly that it reads the subscription feed locally and stores it in
+`storage.local`, and that nothing leaves the device.
+
 ## Debug
 
 - **Background page**: Safari → Develop → Web Extension Background Pages →

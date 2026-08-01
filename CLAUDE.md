@@ -43,7 +43,7 @@ SubstackFront/
 # Safari (macOS + Xcode required):
 ./safari/build.sh --bundle-identifier com.yourcompany.substackfront
 # then open safari/build/xcode/..., set a signing team, and run the app once.
-# Full checklist in safari/README.md
+# Local install and App Store release checklists are in safari/README.md
 ```
 
 ## Testing
@@ -122,6 +122,14 @@ fork a source file into `safari/` — put the difference in
   inbox there. `isIOS()` is duplicated in both files — matching how
   `escapeHtml`/`formatRelativeDate` already are — and pinned together by
   `tests/platform.test.js`.
+
+## Releasing
+
+`manifest.json`'s `version` is the single source of truth. `safari/build.sh`
+copies it into the Xcode project's `MARKETING_VERSION`, so bumping it there is
+enough for both builds; pass `--build-number` for App Store uploads, which need
+a fresh one each time. Safari ships through the App Store inside the wrapper
+app — see the release checklist in `safari/README.md`.
 
 ## Data Model
 

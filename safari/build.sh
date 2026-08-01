@@ -13,6 +13,8 @@
 # Usage: safari/build.sh [options]
 #   --app-name <name>          App name for the wrapper (default: "Substack Front")
 #   --bundle-identifier <id>   Bundle ID (default: com.example.substackfront)
+#   --build-number <n>         Set CURRENT_PROJECT_VERSION; App Store Connect
+#                              needs a new one for every upload of a version
 #   --macos-only               Generate only the macOS target
 #   --ios-only                 Generate only the iOS target
 #   --no-convert               Assemble the payload, skip the Xcode conversion
@@ -28,6 +30,7 @@ PROJECT_DIR="$SCRIPT_DIR/build/xcode"
 
 APP_NAME="Substack Front"
 BUNDLE_ID="com.example.substackfront"
+BUILD_NUMBER=""
 PLATFORM_FLAGS=()
 RUN_CONVERTER=1
 OPEN_XCODE=0
@@ -44,6 +47,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --app-name)          APP_NAME="$2"; shift 2 ;;
     --bundle-identifier) BUNDLE_ID="$2"; shift 2 ;;
+    --build-number)      BUILD_NUMBER="$2"; shift 2 ;;
     --macos-only)        PLATFORM_FLAGS+=(--macos-only); shift ;;
     --ios-only)          PLATFORM_FLAGS+=(--ios-only); shift ;;
     --no-convert)        RUN_CONVERTER=0; shift ;;
@@ -181,13 +185,14 @@ xcrun safari-web-extension-converter "$PAYLOAD_DIR" "${CONVERTER_FLAGS[@]}"
 # com.example.app yields an app of com.example.App-Name alongside an extension
 # of com.example.app.Extension, and ValidateEmbeddedBinary fails the build.
 # Pin both to the identifier that was asked for.
-echo "==> Normalizing bundle identifiers"
-"$PYTHON" - "$PROJECT_DIR" "$BUNDLE_ID" <<'PY'
+echo "==> Normalizing bundle identifiers and version"
+"$PYTHON" - "$PROJECT_DIR" "$BUNDLE_ID" "$PAYLOAD_DIR/manifest.json" "$BUILD_NUMBER" <<'PY'
+import json
 import pathlib
 import re
 import sys
 
-project_dir, bundle_id = sys.argv[1], sys.argv[2]
+project_dir, bundle_id, manifest_path, build_number = sys.argv[1:5]
 
 pbxprojs = sorted(pathlib.Path(project_dir).rglob('*.xcodeproj/project.pbxproj'))
 if not pbxprojs:
@@ -229,6 +234,31 @@ if not any(identifier == bundle_id for identifier in final):
 for identifier in final:
     if identifier != bundle_id and not identifier.startswith(f'{bundle_id}.'):
         sys.exit(f'error: {identifier} is not nested under {bundle_id}')
+
+# The App Store shows the app's version, not the extension's. Drive it from
+# manifest.json so a release cannot ship with the two disagreeing.
+version = json.loads(pathlib.Path(manifest_path).read_text())['version']
+
+wanted = {'MARKETING_VERSION': version}
+if build_number:
+    # App Store Connect rejects a re-uploaded build number, so this is only set
+    # when asked for.
+    wanted['CURRENT_PROJECT_VERSION'] = build_number
+
+for setting, value in wanted.items():
+    pattern = re.compile(rf'({setting} = )([^;]+)(;)')
+    total = 0
+    for path in pbxprojs:
+        text = path.read_text()
+        updated, count = pattern.subn(rf'\g<1>{value}\g<3>', text)
+        if count:
+            path.write_text(updated)
+        total += count
+    if total:
+        print(f'    {setting} -> {value}')
+    else:
+        print(f'    warning: no {setting} build setting found; '
+              f'set the version in Xcode before submitting', file=sys.stderr)
 PY
 
 echo
