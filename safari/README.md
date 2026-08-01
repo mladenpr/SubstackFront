@@ -9,7 +9,6 @@ Safari-specific pieces live in this directory:
 | `manifest.overrides.json` | Safari-specific manifest keys, merged over the root `manifest.json` |
 | `build.sh` | Assembles the Safari payload and runs Apple's Xcode converter |
 | `appicon/` | Generated app icon set, copied into the Xcode project |
-| `make-appicon.py` | Regenerates that set from `icons/appicon-source.png` |
 
 The extension files themselves come from `scripts/shipping-files.txt`, shared
 with the Chrome packager, so both stores ship exactly the same code.
@@ -113,27 +112,33 @@ before. No review queue, but no discoverability either, and it is macOS-only.
 
 ### App icons
 
-`icons/appicon-source.png` (1024x1024) is the source artwork. The set Xcode
-needs is generated from it and committed at
-`safari/appicon/AppIcon.appiconset/` — ten macOS sizes from 16x16 up to
-512x512@2x, plus the single 1024x1024 icon iOS uses.
+`icons/appicon-source.png` (1024x1024) is the source artwork for **both** icon
+sets. `scripts/make-icons.py` generates them and the output is committed, so no
+build needs an image library:
+
+- `safari/appicon/AppIcon.appiconset/` — ten macOS sizes from 16x16 up to
+  512x512@2x plus the single 1024x1024 icon iOS uses, full-bleed and fully
+  opaque. An alpha channel is an automatic App Store rejection.
+- `icons/icon{16,48,128}.png` — the browser toolbar icons, rounded with
+  transparent corners so they sit on browser chrome instead of reading as a
+  coloured tile.
 
 Regenerate after changing the artwork. This is the only script here that needs a
 third-party package:
 
 ```bash
 pip install Pillow
-python3 safari/make-appicon.py
+python3 scripts/make-icons.py
 ```
 
-`tests/appicon.test.js` checks every icon's dimensions against `Contents.json`
-and rejects any with an alpha channel — App Store submissions are turned down
-outright for that, and nothing in the Xcode build would catch it.
+The artwork is drawn to survive downscaling, so every size is a straight resize
+of the same source.
 
-Note the toolbar icons in `icons/icon{16,48,128}.png` are a different, simpler
-mark. They are what Chrome and Safari show next to the address bar; the app icon
-is what the App Store and the Dock show. Regenerating the toolbar set from the
-same artwork is a design decision, not a build one.
+`tests/icons.test.js` checks both sets: dimensions against `Contents.json`,
+opacity for the app icons, transparent corners for the toolbar icons, and that
+each still contains the brand colours. That last check exists because a
+generator bug once repainted the orange background white, leaving a blank icon
+with correct dimensions, alpha and file type.
 
 ### App Review needs to see it work
 
