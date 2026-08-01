@@ -1,0 +1,17 @@
+{
+  "_comment": [
+    "Safari-specific manifest overrides. build.sh merges these over the repo-root",
+    "manifest.json, replacing whole top-level keys (a null value deletes a key).",
+    "Keys starting with _ are stripped from the generated manifest.",
+    "",
+    "background: Safari 15.4+ accepts MV3 with a non-persistent background page,",
+    "and iOS requires one. It is also the safer target on Safari because",
+    "host_permissions are not applied to background service workers there, and",
+    "long setTimeout chains - which the refresh flow depends on - survive better",
+    "in an event page than in a service worker."
+  ],
+  "background": {
+    "scripts": ["background/background.js"],
+    "persistent": false
+  }
+}
