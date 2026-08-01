@@ -48,6 +48,39 @@ SubstackFront/
 
 ## Testing
 
+### Automated
+
+```bash
+node --test                       # whole suite, no dependencies
+node --test tests/background.test.js
+SUBSTACK_TEST_VERBOSE=1 node --test   # show the extension's console output
+```
+
+Requires Node 20+ and nothing else — the suite uses `node:test`/`node:assert`
+only, and runs in CI on every push and pull request
+(`.github/workflows/ci.yml`).
+
+```
+tests/
+├── helpers/extension-stub.js  # loads background.js into a VM with a stub API
+├── background.test.js         # message handling, storage, refresh flow
+├── manifest.test.js           # Chrome + generated Safari manifests, build.sh
+└── syntax.test.js             # every shipped script parses and keeps its guards
+```
+
+The stub defaults to the **Safari** API shape — promise-returning, no
+`storage.local.getBytesInUse` — because that is what regresses silently when
+developing against Chrome. `loadBackground({ getBytesInUse: true })` gives the
+Chrome shape, and `{ namespace: 'browser' }` exercises the alias guard.
+`{ timings: {...} }` shrinks the refresh delays so timeout behaviour is testable
+in milliseconds; it throws if a timing constant is renamed rather than silently
+not applying.
+
+The content script and UI scripts are only syntax-checked — they need a DOM, so
+their behaviour is still verified by hand.
+
+### By hand
+
 1. Load extension in Chrome
 2. Visit https://substack.com/inbox (logged in)
 3. Check DevTools console for extraction logs
@@ -79,6 +112,9 @@ fork a source file into `safari/` — put the difference in
 - Prefer promise-style API calls — Chrome MV3 and Safari both support them.
 - Don't rely on `tabs.onUpdated` alone for sequencing; Safari delivers it
   inconsistently without the `tabs` permission.
+- Add a case to `tests/background.test.js` for anything that behaves
+  differently between the two browsers. CI has no Safari, so the stub is the
+  only thing standing between a Safari-only regression and the App Store.
 
 ## Data Model
 

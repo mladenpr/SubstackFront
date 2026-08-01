@@ -120,6 +120,18 @@ two things make the **Refresh** button unreliable on iOS:
 Passive collection (browse your Substack inbox, posts get captured) works fine
 on iOS. If you ship an iOS build, consider hiding the Refresh button there.
 
+## What CI covers
+
+`.github/workflows/ci.yml` runs `node --test` and shellchecks this build script
+on every push and pull request. That covers the payload assembly, the generated
+manifest, and the background worker's behaviour against a Safari-shaped API stub
+(`tests/helpers/extension-stub.js`).
+
+It does **not** cover Safari itself: GitHub's Linux runners have no Safari and no
+Xcode, so the converter step, the Xcode build, and anything DOM-dependent
+(`content/content.js`, the popup, the tab view) are still verified by hand. Run
+`./safari/build.sh` on a Mac before shipping.
+
 ## Keeping the two builds in sync
 
 `build.sh` reads `name`, `version`, `description`, `permissions`,
