@@ -50,6 +50,12 @@ Run `./safari/build.sh --help` for all options.
 1. Open `safari/build/xcode/Substack Front/Substack Front.xcodeproj`.
 2. Select your team under **Signing & Capabilities** for both the app target and
    the extension target. A free personal team is fine for local testing.
+
+   The bundle identifiers are already correct — `build.sh` normalizes them after
+   conversion so the extension is `<your id>.Extension` under an app of
+   `<your id>`. Without that, Xcode 26 derives the app's identifier from a
+   prefix plus the product name, the two stop nesting, and the build fails at
+   `ValidateEmbeddedBinary`. If you change one identifier by hand, change both.
 3. Build and run the app once — that is what registers the extension with Safari.
 4. Safari → Settings → **Advanced** → enable *Show features for web developers*.
 5. Safari → Develop → Developer Settings → enable **Allow unsigned extensions**

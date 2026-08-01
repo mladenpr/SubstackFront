@@ -175,6 +175,62 @@ done
 
 xcrun safari-web-extension-converter "$PAYLOAD_DIR" "${CONVERTER_FLAGS[@]}"
 
+# Xcode requires an app extension's bundle identifier to be prefixed with its
+# parent app's. The converter does not guarantee that: Xcode 26 derives the app
+# target's identifier from a prefix plus the product name, so passing
+# com.example.app yields an app of com.example.App-Name alongside an extension
+# of com.example.app.Extension, and ValidateEmbeddedBinary fails the build.
+# Pin both to the identifier that was asked for.
+echo "==> Normalizing bundle identifiers"
+"$PYTHON" - "$PROJECT_DIR" "$BUNDLE_ID" <<'PY'
+import pathlib
+import re
+import sys
+
+project_dir, bundle_id = sys.argv[1], sys.argv[2]
+
+pbxprojs = sorted(pathlib.Path(project_dir).rglob('*.xcodeproj/project.pbxproj'))
+if not pbxprojs:
+    sys.exit(f'error: no project.pbxproj found under {project_dir}')
+
+SETTING = re.compile(r'(PRODUCT_BUNDLE_IDENTIFIER = )([^;]+)(;)')
+
+
+def target_identifier(current):
+    """App targets get the identifier verbatim; extensions get it as a prefix."""
+    trailing = current.strip('"').rsplit('.', 1)[-1]
+    if 'extension' in trailing.lower():
+        return f'{bundle_id}.{trailing}'
+    return bundle_id
+
+
+seen = []
+
+for path in pbxprojs:
+    text = path.read_text()
+
+    def replace(match):
+        new = target_identifier(match.group(2))
+        seen.append((match.group(2), new))
+        return f'{match.group(1)}{new}{match.group(3)}'
+
+    updated, count = SETTING.subn(replace, text)
+    if not count:
+        sys.exit(f'error: {path} declares no PRODUCT_BUNDLE_IDENTIFIER')
+
+    path.write_text(updated)
+
+for old, new in dict.fromkeys(seen):
+    print(f'    {old}  ->  {new}')
+
+final = {new for _, new in seen}
+if not any(identifier == bundle_id for identifier in final):
+    sys.exit(f'error: no target ended up with the app identifier {bundle_id}')
+for identifier in final:
+    if identifier != bundle_id and not identifier.startswith(f'{bundle_id}.'):
+        sys.exit(f'error: {identifier} is not nested under {bundle_id}')
+PY
+
 echo
 echo "==> Done. Xcode project: $PROJECT_DIR"
 echo "    Next: open it, set your signing team, and run the app once to register"
