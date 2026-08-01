@@ -4,6 +4,12 @@
 (function() {
   'use strict';
 
+  // Cross-browser API namespace. Safari and Firefox expose `browser` and alias
+  // `chrome`; this guard keeps us working if that alias ever goes away.
+  if (typeof globalThis.chrome === 'undefined' && typeof globalThis.browser !== 'undefined') {
+    globalThis.chrome = globalThis.browser;
+  }
+
   // Only run on substack.com
   if (!window.location.hostname.includes('substack.com')) {
     return;
@@ -256,31 +262,40 @@
 
   /**
    * Send extracted posts to background worker
+   * @param {Array} posts - Extracted posts
+   * @param {boolean} force - Send even when empty, so a waiting refresh can settle
    */
-  function sendPostsToBackground(posts) {
-    if (posts.length === 0) {
+  function sendPostsToBackground(posts, force = false) {
+    if (posts.length === 0 && !force) {
       console.log('[SubstackFront] No posts to send');
       return;
     }
 
     console.log(`[SubstackFront] Sending ${posts.length} posts to background`);
 
-    chrome.runtime.sendMessage({
-      type: 'POSTS_EXTRACTED',
-      posts: posts
-    }, response => {
-      if (chrome.runtime.lastError) {
-        console.error('[SubstackFront] Error sending message:', chrome.runtime.lastError);
-      } else {
-        console.log('[SubstackFront] Background response:', response);
+    // Promise style works in Chrome MV3 and Safari; fall back to a callback if
+    // sendMessage returns nothing.
+    try {
+      const result = chrome.runtime.sendMessage({
+        type: 'POSTS_EXTRACTED',
+        posts: posts
+      });
+
+      if (result && typeof result.then === 'function') {
+        result
+          .then(response => console.log('[SubstackFront] Background response:', response))
+          .catch(error => console.error('[SubstackFront] Error sending message:', error));
       }
-    });
+    } catch (error) {
+      console.error('[SubstackFront] Error sending message:', error);
+    }
   }
 
   /**
    * Main extraction function
+   * @param {boolean} force - Report the result even when no posts were found
    */
-  function runExtraction() {
+  function runExtraction(force = false) {
     console.log('[SubstackFront] Running extraction...');
     const posts = extractAllPosts();
     console.log(`[SubstackFront] Extracted ${posts.length} posts`);
@@ -289,7 +304,7 @@
       console.log('[SubstackFront] Sample post:', posts[0]);
     }
 
-    sendPostsToBackground(posts);
+    sendPostsToBackground(posts, force);
   }
 
   // Debounce helper
@@ -335,10 +350,12 @@
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === 'TRIGGER_EXTRACTION') {
       console.log('[SubstackFront] Received extraction trigger from background');
-      runExtraction();
+      runExtraction(message.force === true);
       sendResponse({ success: true });
     }
-    return true;
+    // Responses above are synchronous - returning true here would leave the
+    // message channel open, which Safari does not clean up on its own.
+    return false;
   });
 
 })();

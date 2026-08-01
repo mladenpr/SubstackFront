@@ -3,6 +3,12 @@
 (function() {
   'use strict';
 
+  // Cross-browser API namespace. Safari and Firefox expose `browser` and alias
+  // `chrome`; this guard keeps us working if that alias ever goes away.
+  if (typeof globalThis.chrome === 'undefined' && typeof globalThis.browser !== 'undefined') {
+    globalThis.chrome = globalThis.browser;
+  }
+
   // DOM Elements
   const loadingEl = document.getElementById('loading');
   const emptyStateEl = document.getElementById('empty-state');
@@ -269,7 +275,11 @@
         console.log('[SubstackFront] Refresh complete:', response);
         // Force reload posts instead of relying on storage listener
         await loadPosts();
-        showToast('Feed refreshed successfully', 'success');
+        const added = response.added || 0;
+        showToast(
+          added > 0 ? `${added} new post${added === 1 ? '' : 's'} added` : 'No new posts found',
+          added > 0 ? 'success' : 'info'
+        );
       } else {
         console.error('[SubstackFront] Refresh failed:', response.error);
         showToast('Refresh failed: ' + response.error, 'error');

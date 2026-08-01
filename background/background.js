@@ -1,11 +1,22 @@
-// SubstackFront - Background Service Worker
+// SubstackFront - Background Worker
 // Manages post storage and coordinates between content script and UI
+//
+// Runs as an MV3 service worker in Chrome and as a non-persistent background
+// page in Safari (see safari/README.md). Nothing here may depend on either
+// environment's globals.
 
-console.log('[SubstackFront] Background service worker started');
+// Cross-browser API namespace. Safari and Firefox expose `browser` and alias
+// `chrome`; this guard keeps us working if that alias ever goes away.
+if (typeof globalThis.chrome === 'undefined' && typeof globalThis.browser !== 'undefined') {
+  globalThis.chrome = globalThis.browser;
+}
+
+console.log('[SubstackFront] Background worker started');
 
 // Storage limits
 const MAX_POSTS = 300;
-const STORAGE_WARNING_THRESHOLD = 4 * 1024 * 1024; // 4MB (80% of 5MB limit)
+const STORAGE_QUOTA_BYTES = 5 * 1024 * 1024; // Chrome's storage.local limit; Safari's is not published
+const STORAGE_WARNING_THRESHOLD = 4 * 1024 * 1024; // 4MB (80% of the assumed limit)
 const MAX_POST_AGE_DAYS = 30;
 
 /**
@@ -94,8 +105,13 @@ async function savePosts(newPosts) {
     lastUpdated: new Date().toISOString()
   });
 
-  // Check storage usage and auto-cleanup if needed
-  await checkAndCleanupStorage();
+  // Check storage usage and auto-cleanup if needed. Housekeeping must never
+  // fail the save - the posts are already persisted at this point.
+  try {
+    await checkAndCleanupStorage();
+  } catch (error) {
+    console.warn('[SubstackFront] Storage cleanup check failed:', error.message);
+  }
 
   console.log(`[SubstackFront] Saved posts - Added: ${addedCount}, Updated: ${updatedCount}, Total: ${allPosts.length}`);
 
@@ -136,29 +152,54 @@ async function getStats() {
 }
 
 /**
- * Get storage usage in bytes
+ * Estimate storage usage by measuring the serialized size of everything stored.
+ * Used where storage.local.getBytesInUse is unavailable (Safari).
+ */
+async function estimateStorageUsage() {
+  const everything = await chrome.storage.local.get(null);
+  let bytes = 0;
+  const encoder = new TextEncoder();
+
+  for (const [key, value] of Object.entries(everything)) {
+    bytes += encoder.encode(key).length;
+    bytes += encoder.encode(JSON.stringify(value ?? null)).length;
+  }
+
+  return bytes;
+}
+
+/**
+ * Get storage usage in bytes.
+ * Returns { bytes, estimated } - Safari has no getBytesInUse, so we measure instead.
  */
 async function getStorageUsage() {
-  return new Promise((resolve) => {
-    chrome.storage.local.getBytesInUse(null, (bytesInUse) => {
-      resolve(bytesInUse);
-    });
-  });
+  if (typeof chrome.storage.local.getBytesInUse === 'function') {
+    try {
+      const bytes = await chrome.storage.local.getBytesInUse(null);
+      if (typeof bytes === 'number') {
+        return { bytes, estimated: false };
+      }
+    } catch (error) {
+      console.log('[SubstackFront] getBytesInUse unavailable, estimating instead:', error.message);
+    }
+  }
+
+  return { bytes: await estimateStorageUsage(), estimated: true };
 }
 
 /**
  * Get detailed storage stats including byte usage
  */
 async function getStorageStats() {
-  const bytesUsed = await getStorageUsage();
+  const { bytes: bytesUsed, estimated } = await getStorageUsage();
   const stats = await getStats();
-  const maxBytes = 5 * 1024 * 1024; // 5MB chrome.storage.local limit
 
   return {
     ...stats,
     bytesUsed,
-    bytesMax: maxBytes,
-    percentUsed: Math.round((bytesUsed / maxBytes) * 100),
+    bytesUsedIsEstimate: estimated,
+    bytesMax: STORAGE_QUOTA_BYTES,
+    percentUsed: Math.round((bytesUsed / STORAGE_QUOTA_BYTES) * 100),
     isNearLimit: bytesUsed >= STORAGE_WARNING_THRESHOLD
   };
 }
@@ -190,7 +231,7 @@ async function cleanupOldPosts(maxAgeDays = MAX_POST_AGE_DAYS) {
  * Check storage usage and cleanup if exceeding threshold
  */
 async function checkAndCleanupStorage() {
-  const bytesUsed = await getStorageUsage();
+  const { bytes: bytesUsed } = await getStorageUsage();
 
   if (bytesUsed >= STORAGE_WARNING_THRESHOLD) {
     console.log(`[SubstackFront] Storage usage high (${Math.round(bytesUsed / 1024 / 1024 * 100) / 100}MB), running auto-cleanup...`);
@@ -198,11 +239,94 @@ async function checkAndCleanupStorage() {
   }
 }
 
+// Refresh tuning
+const REFRESH_URL = 'https://substack.com/inbox';
+const REFRESH_TIMEOUT_MS = 30000;
+const LOAD_COMPLETE_TRIGGER_DELAY_MS = 2000;
+// Safari does not reliably deliver tabs.onUpdated status changes without the
+// "tabs" permission, so poke the content script on a fixed schedule too. Each
+// trigger is a no-op once the refresh has resolved.
+const FALLBACK_TRIGGER_DELAYS_MS = [4000, 9000, 16000];
+// Last attempt before the timeout. Only this one asks the content script to
+// report an empty result, so a logged-out or slow-rendering inbox fails fast
+// instead of hanging - earlier attempts stay silent and let the retries run.
+const FINAL_TRIGGER_DELAY_MS = 24000;
+
 // Track pending refresh state
 let pendingRefreshTabId = null;
 let pendingRefreshResolve = null;
 let pendingRefreshReject = null;
 let pendingTabUpdateListener = null;
+let pendingRefreshTimers = [];
+
+/**
+ * Close a tab, tolerating both promise- and callback-style tabs.remove
+ */
+function closeTab(tabId) {
+  try {
+    const result = chrome.tabs.remove(tabId);
+    if (result && typeof result.catch === 'function') {
+      result.catch(() => {});
+    }
+  } catch (error) {
+    // Tab already gone
+  }
+}
+
+/**
+ * Clean up refresh listeners and timers
+ */
+function cleanupRefreshState() {
+  if (pendingTabUpdateListener) {
+    chrome.tabs.onUpdated.removeListener(pendingTabUpdateListener);
+    pendingTabUpdateListener = null;
+  }
+  pendingRefreshTimers.forEach(clearTimeout);
+  pendingRefreshTimers = [];
+}
+
+/**
+ * Settle the in-flight refresh promise, if any
+ */
+function settleRefresh(error, result) {
+  const resolve = pendingRefreshResolve;
+  const reject = pendingRefreshReject;
+  pendingRefreshResolve = null;
+  pendingRefreshReject = null;
+
+  if (error) {
+    if (reject) reject(error);
+  } else if (resolve) {
+    resolve(result);
+  }
+}
+
+/**
+ * Ask the content script in a refresh tab to extract now
+ * @param {number} tabId - Tab hosting the content script
+ * @param {boolean} force - Have it report back even if it found nothing
+ */
+async function triggerExtraction(tabId, force) {
+  if (pendingRefreshTabId !== tabId) return;
+
+  try {
+    const response = await chrome.tabs.sendMessage(tabId, {
+      type: 'TRIGGER_EXTRACTION',
+      force
+    });
+    console.log('[SubstackFront] Extraction triggered, response:', response);
+  } catch (error) {
+    // Content script may not have loaded yet - a later trigger will retry
+    console.log('[SubstackFront] Could not send extraction trigger:', error.message);
+  }
+}
+
+/**
+ * Schedule an extraction trigger and remember the timer so it can be cancelled
+ */
+function scheduleExtractionTrigger(tabId, delayMs, force = false) {
+  pendingRefreshTimers.push(setTimeout(() => triggerExtraction(tabId, force), delayMs));
+}
 
 /**
  * Refresh feed by opening Substack in a background tab
@@ -210,89 +334,54 @@ let pendingTabUpdateListener = null;
 async function refreshFeed() {
   console.log('[SubstackFront] Starting background refresh...');
 
-  // Clear any previous pending refresh
-  if (pendingRefreshTabId) {
+  // Abandon any previous pending refresh
+  cleanupRefreshState();
+  if (pendingRefreshTabId !== null) {
     console.log('[SubstackFront] Cleaning up previous refresh attempt');
-    chrome.tabs.remove(pendingRefreshTabId).catch(() => {});
+    closeTab(pendingRefreshTabId);
     pendingRefreshTabId = null;
   }
+  settleRefresh(new Error('Superseded by a newer refresh'));
+
+  let tab;
+  try {
+    // On iOS 18.3+ Safari ignores `active: false` and foregrounds the tab anyway.
+    tab = await chrome.tabs.create({ url: REFRESH_URL, active: false });
+  } catch (error) {
+    console.error('[SubstackFront] Failed to create tab:', error);
+    throw new Error(`Could not open ${REFRESH_URL}: ${error.message}`);
+  }
+
+  pendingRefreshTabId = tab.id;
+  console.log('[SubstackFront] Created background tab:', tab.id);
 
   return new Promise((resolve, reject) => {
     pendingRefreshResolve = resolve;
     pendingRefreshReject = reject;
 
-    // Clean up any previous listener
-    if (pendingTabUpdateListener) {
-      chrome.tabs.onUpdated.removeListener(pendingTabUpdateListener);
-    }
-
-    // Listen for tab updates to know when page is fully loaded
+    // Trigger extraction once the page reports it has finished loading
     pendingTabUpdateListener = (tabId, changeInfo) => {
       if (tabId === pendingRefreshTabId && changeInfo.status === 'complete') {
         console.log('[SubstackFront] Background tab finished loading, triggering extraction...');
         // Give extra time for Substack's JavaScript to render content
-        setTimeout(() => {
-          if (pendingRefreshTabId === tabId) {
-            // Send message to content script to trigger extraction
-            chrome.tabs.sendMessage(tabId, { type: 'TRIGGER_EXTRACTION' }, (response) => {
-              if (chrome.runtime.lastError) {
-                console.log('[SubstackFront] Could not send extraction trigger:', chrome.runtime.lastError.message);
-              } else {
-                console.log('[SubstackFront] Extraction triggered, response:', response);
-              }
-            });
-          }
-        }, 2000);
+        scheduleExtractionTrigger(tabId, LOAD_COMPLETE_TRIGGER_DELAY_MS);
       }
     };
-
     chrome.tabs.onUpdated.addListener(pendingTabUpdateListener);
 
-    // Open Substack inbox in a new tab (not active)
-    chrome.tabs.create({
-      url: 'https://substack.com/inbox',
-      active: false
-    }, (tab) => {
-      if (chrome.runtime.lastError) {
-        console.error('[SubstackFront] Failed to create tab:', chrome.runtime.lastError);
-        chrome.tabs.onUpdated.removeListener(pendingTabUpdateListener);
-        pendingTabUpdateListener = null;
-        reject(new Error(chrome.runtime.lastError.message));
-        return;
-      }
+    FALLBACK_TRIGGER_DELAYS_MS.forEach(delay => scheduleExtractionTrigger(tab.id, delay));
+    scheduleExtractionTrigger(tab.id, FINAL_TRIGGER_DELAY_MS, true);
 
-      pendingRefreshTabId = tab.id;
-      console.log('[SubstackFront] Created background tab:', tab.id);
+    pendingRefreshTimers.push(setTimeout(() => {
+      if (pendingRefreshTabId !== tab.id) return;
 
-      // Timeout after 30 seconds
-      setTimeout(() => {
-        if (pendingTabUpdateListener) {
-          chrome.tabs.onUpdated.removeListener(pendingTabUpdateListener);
-          pendingTabUpdateListener = null;
-        }
-        if (pendingRefreshTabId === tab.id) {
-          console.log('[SubstackFront] Background refresh timed out');
-          chrome.tabs.remove(tab.id).catch(() => {});
-          pendingRefreshTabId = null;
-          if (pendingRefreshReject) {
-            pendingRefreshReject(new Error('Refresh timed out - try visiting substack.com/inbox manually'));
-            pendingRefreshReject = null;
-            pendingRefreshResolve = null;
-          }
-        }
-      }, 30000);
-    });
+      console.log('[SubstackFront] Background refresh timed out');
+      cleanupRefreshState();
+      closeTab(tab.id);
+      pendingRefreshTabId = null;
+      settleRefresh(new Error('Refresh timed out - try visiting substack.com/inbox manually'));
+    }, REFRESH_TIMEOUT_MS));
   });
-}
-
-/**
- * Clean up refresh state
- */
-function cleanupRefreshState() {
-  if (pendingTabUpdateListener) {
-    chrome.tabs.onUpdated.removeListener(pendingTabUpdateListener);
-    pendingTabUpdateListener = null;
-  }
 }
 
 /**
@@ -310,24 +399,14 @@ async function handleRefreshPosts(tabId, posts) {
 
   try {
     const result = await savePosts(posts);
-    chrome.tabs.remove(tabId).catch(() => {});
+    closeTab(tabId);
     pendingRefreshTabId = null;
-
-    if (pendingRefreshResolve) {
-      pendingRefreshResolve(result);
-      pendingRefreshResolve = null;
-      pendingRefreshReject = null;
-    }
+    settleRefresh(null, result);
     return true;
   } catch (error) {
-    chrome.tabs.remove(tabId).catch(() => {});
+    closeTab(tabId);
     pendingRefreshTabId = null;
-
-    if (pendingRefreshReject) {
-      pendingRefreshReject(error);
-      pendingRefreshReject = null;
-      pendingRefreshResolve = null;
-    }
+    settleRefresh(error);
     return false;
   }
 }
@@ -397,17 +476,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     default:
       sendResponse({ success: false, error: 'Unknown message type' });
+      return false;
   }
 });
 
 // Log when extension is installed or updated
-chrome.runtime.onInstalled.addListener((details) => {
+chrome.runtime.onInstalled.addListener(async (details) => {
   console.log('[SubstackFront] Extension installed/updated:', details.reason);
 
   // Initialize storage if needed
-  chrome.storage.local.get(['posts'], (result) => {
+  try {
+    const result = await chrome.storage.local.get(['posts']);
     if (!result.posts) {
-      chrome.storage.local.set({ posts: [], lastUpdated: null });
+      await chrome.storage.local.set({ posts: [], lastUpdated: null });
     }
-  });
+  } catch (error) {
+    console.error('[SubstackFront] Could not initialize storage:', error);
+  }
 });
