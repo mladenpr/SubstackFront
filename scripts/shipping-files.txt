@@ -1,0 +1,32 @@
+# Files that ship inside the extension.
+#
+# This is the single source of truth for both packagers - scripts/build-chrome.sh
+# and safari/build.sh - so the Chrome zip and the Safari payload can never
+# disagree about what ships. Everything else in the repo (tests/, .github/,
+# safari/, the docs) stays out of both.
+#
+# One glob or path per line, relative to the repo root. Blank lines and lines
+# starting with # are ignored. Every pattern must match at least one file, so a
+# rename that orphans a line fails the build instead of silently shipping less.
+#
+# Code directories use globs, so adding a file there just works. Icons are
+# listed one by one on purpose: icons/ also holds appicon-source.png, which is
+# App Store artwork for the Mac wrapper app and has no business inside the
+# shipped extension - a glob there put ~1MB of dead weight in every build.
+
+manifest.json
+
+background/*.js
+content/*.js
+
+popup/*.html
+popup/*.js
+popup/*.css
+
+newtab/*.html
+newtab/*.js
+newtab/*.css
+
+icons/icon16.png
+icons/icon48.png
+icons/icon128.png

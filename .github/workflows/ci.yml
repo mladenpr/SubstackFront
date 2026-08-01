@@ -26,5 +26,16 @@ jobs:
       - name: Run tests
         run: node --test
 
-      - name: Lint the Safari build script
-        run: shellcheck safari/build.sh
+      - name: Lint the shell scripts
+        run: shellcheck safari/build.sh scripts/*.sh
+
+      # Every green build leaves behind an upload-ready Chrome package, so
+      # releasing never means hand-zipping and hoping the layout is right.
+      - name: Package the Chrome build
+        run: ./scripts/build-chrome.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chrome-extension
+          path: dist/*.zip
+          if-no-files-found: error

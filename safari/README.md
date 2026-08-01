@@ -8,6 +8,11 @@ Safari-specific pieces live in this directory:
 | --- | --- |
 | `manifest.overrides.json` | Safari-specific manifest keys, merged over the root `manifest.json` |
 | `build.sh` | Assembles the Safari payload and runs Apple's Xcode converter |
+| `appicon/` | Generated app icon set, copied into the Xcode project |
+| `make-appicon.py` | Regenerates that set from `icons/appicon-source.png` |
+
+The extension files themselves come from `scripts/shipping-files.txt`, shared
+with the Chrome packager, so both stores ship exactly the same code.
 
 Safari cannot load a bare extension folder. Every Safari web extension ships
 *inside* a native app wrapper, so the build produces an Xcode project containing
@@ -19,9 +24,9 @@ a small host app plus this extension.
   `safari-web-extension-converter` ships with Xcode).
 - **Safari 15.4+** for Manifest V3. Safari 16.4+ is a better target: it fixes
   several MV3 bugs, including background scripts failing to import other scripts.
-- An **Apple Developer Program** membership ($99/year) to distribute. Safari
-  extensions are distributed through the App Store only — there is no
-  side-loadable `.crx` equivalent. Local development works without one.
+- An **Apple Developer Program** membership ($99/year) to distribute. There is
+  no side-loadable `.crx` equivalent — see *Ship it to other people* below.
+  Local development works without one.
 
 ## Build
 
@@ -50,6 +55,12 @@ Run `./safari/build.sh --help` for all options.
 1. Open `safari/build/xcode/Substack Front/Substack Front.xcodeproj`.
 2. Select your team under **Signing & Capabilities** for both the app target and
    the extension target. A free personal team is fine for local testing.
+
+   The bundle identifiers are already correct — `build.sh` normalizes them after
+   conversion so the extension is `<your id>.Extension` under an app of
+   `<your id>`. Without that, Xcode 26 derives the app's identifier from a
+   prefix plus the product name, the two stop nesting, and the build fails at
+   `ValidateEmbeddedBinary`. If you change one identifier by hand, change both.
 3. Build and run the app once — that is what registers the extension with Safari.
 4. Safari → Settings → **Advanced** → enable *Show features for web developers*.
 5. Safari → Develop → Developer Settings → enable **Allow unsigned extensions**
@@ -61,6 +72,78 @@ Run `./safari/build.sh --help` for all options.
 
 Step 7 is the step people miss. Safari installs extensions **disabled** with no
 host access, so until it is done the popup will just show the empty state.
+
+## Ship it to other people
+
+Unlike Chrome, there is no "upload a zip to a store" path. The extension ships
+inside the wrapper app, so you are publishing a Mac app that happens to contain
+a Safari extension. Two routes, both needing a paid Apple Developer membership:
+
+**Mac App Store** — the equivalent of the Chrome Web Store. Users search for the
+app, install it, and the extension appears in Safari's Extensions settings.
+Goes through App Review. One submission can cover macOS and iPhone/iPad if you
+keep the iOS target.
+
+**Developer ID, outside the App Store** — sign and notarize the app and host the
+download yourself. Since Safari 18.4 users no longer have to turn on *Allow
+Unsigned Extensions* for these, which is what made this route impractical
+before. No review queue, but no discoverability either, and it is macOS-only.
+
+### Release checklist
+
+1. **Register the bundle identifiers** in the developer portal: your app's
+   (`com.yourcompany.substackfront`) and the extension's
+   (`com.yourcompany.substackfront.Extension`).
+2. **Bump the version** in the root `manifest.json`. That is the single source
+   of truth — `build.sh` copies it into the Xcode project's `MARKETING_VERSION`,
+   so the App Store listing and the extension can't disagree.
+3. **Build**, giving App Store Connect a build number it has not seen before:
+   ```bash
+   ./safari/build.sh \
+     --bundle-identifier com.yourcompany.substackfront \
+     --build-number 1
+   ```
+4. In Xcode, set your team on **both** targets, then **Product → Archive** and
+   **Distribute App**. The app icon is already in place — `build.sh` copies
+   `safari/appicon/AppIcon.appiconset` over the converter's placeholder.
+5. Fill in App Store Connect: description, category, screenshots, support URL,
+   privacy policy URL, and the privacy questionnaire. `PRIVACY.md` in the repo
+   root has the content; it needs to be hosted somewhere public.
+6. Submit for review.
+
+### App icons
+
+`icons/appicon-source.png` (1024x1024) is the source artwork. The set Xcode
+needs is generated from it and committed at
+`safari/appicon/AppIcon.appiconset/` — ten macOS sizes from 16x16 up to
+512x512@2x, plus the single 1024x1024 icon iOS uses.
+
+Regenerate after changing the artwork. This is the only script here that needs a
+third-party package:
+
+```bash
+pip install Pillow
+python3 safari/make-appicon.py
+```
+
+`tests/appicon.test.js` checks every icon's dimensions against `Contents.json`
+and rejects any with an alpha channel — App Store submissions are turned down
+outright for that, and nothing in the Xcode build would catch it.
+
+Note the toolbar icons in `icons/icon{16,48,128}.png` are a different, simpler
+mark. They are what Chrome and Safari show next to the address bar; the app icon
+is what the App Store and the Dock show. Regenerating the toolbar set from the
+same artwork is a design decision, not a build one.
+
+### App Review needs to see it work
+
+The extension shows nothing until it has
+extracted posts from a logged-in Substack inbox, and reviewers will not have a
+Substack account with subscriptions. Supply demo account credentials in the
+review notes, or expect a rejection for "we could not evaluate the
+functionality". Also be ready to justify the `substack.com` host permission —
+say plainly that it reads the subscription feed locally and stores it in
+`storage.local`, and that nothing leaves the device.
 
 ## Debug
 
@@ -109,28 +192,41 @@ It now returns `false` because it always answers synchronously.
 ## iOS / iPadOS caveats
 
 `./safari/build.sh` generates an iOS target too, and the UI is responsive, but
-two things make the **Refresh** button unreliable on iOS:
+background refresh cannot work there:
 
 - `tabs.create({ active: false })` is broken on iOS 18.3+ — the new tab is
   foregrounded regardless, so a refresh visibly yanks the user to
   `substack.com/inbox`.
-- Opening that tab dismisses the popup, so the popup never sees the result. The
-  posts are still saved; reopening the popup shows them.
+- Opening that tab dismisses the popup, so the popup never sees the result.
 
-Passive collection (browse your Substack inbox, posts get captured) works fine
-on iOS. If you ship an iOS build, consider hiding the Refresh button there.
+Both the popup and the tab view therefore **replace Refresh with a plain link to
+the inbox** on iOS rather than offering a button that would misbehave. Tapping
+it lands on Substack, the content script extracts as usual, and the posts are
+there when the user comes back. Passive collection — browse your inbox, posts get
+captured — is unaffected.
+
+The switch is `isIOS()` in `popup/popup.js` and `newtab/newtab.js`. It matches
+iPhone/iPad/iPod user agents, plus the desktop-Mac user agent iPadOS 13+ sends,
+which is distinguished by `navigator.maxTouchPoints`. The two copies are pinned
+together by `tests/platform.test.js`.
 
 ## What CI covers
 
-`.github/workflows/ci.yml` runs `node --test` and shellchecks this build script
-on every push and pull request. That covers the payload assembly, the generated
-manifest, and the background worker's behaviour against a Safari-shaped API stub
-(`tests/helpers/extension-stub.js`).
+Two workflows:
 
-It does **not** cover Safari itself: GitHub's Linux runners have no Safari and no
-Xcode, so the converter step, the Xcode build, and anything DOM-dependent
-(`content/content.js`, the popup, the tab view) are still verified by hand. Run
-`./safari/build.sh` on a Mac before shipping.
+- **`.github/workflows/ci.yml`** (Linux, every push and PR) runs `node --test`
+  and shellchecks this build script. Covers the payload assembly, the generated
+  manifest, and the background worker against a Safari-shaped API stub
+  (`tests/helpers/extension-stub.js`).
+- **`.github/workflows/safari.yml`** (macOS) runs Apple's converter for real and
+  compiles the generated Xcode project unsigned. This is the only check that
+  exercises the packaging path. macOS runner minutes bill at 10x, so it is
+  scoped by `paths` to files that can affect the Safari build.
+
+Neither covers **Safari at runtime**. Nothing on a CI runner loads the extension
+into a browser, so the DOM-dependent code (`content/content.js`, the popup, the
+tab view) and everything in the checklists above are still verified by hand.
+Extraction in particular depends on Substack's markup, which no test here pins.
 
 ## Keeping the two builds in sync
 

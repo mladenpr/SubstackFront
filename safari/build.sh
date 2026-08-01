@@ -13,6 +13,8 @@
 # Usage: safari/build.sh [options]
 #   --app-name <name>          App name for the wrapper (default: "Substack Front")
 #   --bundle-identifier <id>   Bundle ID (default: com.example.substackfront)
+#   --build-number <n>         Set CURRENT_PROJECT_VERSION; App Store Connect
+#                              needs a new one for every upload of a version
 #   --macos-only               Generate only the macOS target
 #   --ios-only                 Generate only the iOS target
 #   --no-convert               Assemble the payload, skip the Xcode conversion
@@ -25,15 +27,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 PAYLOAD_DIR="$SCRIPT_DIR/build/extension"
 PROJECT_DIR="$SCRIPT_DIR/build/xcode"
+APPICON_DIR="$SCRIPT_DIR/appicon/AppIcon.appiconset"
 
 APP_NAME="Substack Front"
 BUNDLE_ID="com.example.substackfront"
+BUILD_NUMBER=""
 PLATFORM_FLAGS=()
 RUN_CONVERTER=1
 OPEN_XCODE=0
-
-# Files and directories copied verbatim from the repo root into the payload.
-SHARED_PATHS=(background content newtab popup icons)
 
 usage() {
   # Print the header comment block, minus the shebang.
@@ -44,6 +45,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --app-name)          APP_NAME="$2"; shift 2 ;;
     --bundle-identifier) BUNDLE_ID="$2"; shift 2 ;;
+    --build-number)      BUILD_NUMBER="$2"; shift 2 ;;
     --macos-only)        PLATFORM_FLAGS+=(--macos-only); shift ;;
     --ios-only)          PLATFORM_FLAGS+=(--ios-only); shift ;;
     --no-convert)        RUN_CONVERTER=0; shift ;;
@@ -59,20 +61,20 @@ if [[ -z "$PYTHON" ]]; then
   exit 1
 fi
 
+# The file list is shared with the Chrome packager (scripts/shipping-files.txt)
+# so the two builds cannot disagree about what ships.
 echo "==> Assembling Safari payload in $PAYLOAD_DIR"
 rm -rf "$PAYLOAD_DIR"
 mkdir -p "$PAYLOAD_DIR"
 
-for path in "${SHARED_PATHS[@]}"; do
-  if [[ ! -e "$REPO_ROOT/$path" ]]; then
-    echo "error: missing $path in $REPO_ROOT" >&2
-    exit 1
-  fi
-  cp -R "$REPO_ROOT/$path" "$PAYLOAD_DIR/"
-done
+payload_files=0
+while IFS= read -r relative; do
+  mkdir -p "$PAYLOAD_DIR/$(dirname "$relative")"
+  cp "$REPO_ROOT/$relative" "$PAYLOAD_DIR/$relative"
+  payload_files=$((payload_files + 1))
+done < <("$REPO_ROOT/scripts/list-shipping-files.sh")
 
-# Drop anything that should never ship inside the extension bundle.
-find "$PAYLOAD_DIR" -name '.DS_Store' -delete
+echo "    $payload_files files"
 
 echo "==> Generating manifest.json from manifest.json + manifest.overrides.json"
 "$PYTHON" - "$REPO_ROOT/manifest.json" "$SCRIPT_DIR/manifest.overrides.json" "$PAYLOAD_DIR/manifest.json" <<'PY'
@@ -143,21 +145,140 @@ echo "==> Running safari-web-extension-converter"
 rm -rf "$PROJECT_DIR"
 mkdir -p "$PROJECT_DIR"
 
+# Apple has changed this tool's options across Xcode releases. Anything not
+# advertised by --help is skipped with a note rather than failing the build;
+# the three flags below it are essential, so they are always passed.
+CONVERTER_HELP="$(xcrun safari-web-extension-converter --help 2>&1 || true)"
+
 CONVERTER_FLAGS=(
   --project-location "$PROJECT_DIR"
   --app-name "$APP_NAME"
   --bundle-identifier "$BUNDLE_ID"
-  --swift
-  --copy-resources
-  --force
-  --no-prompt
 )
+
+add_optional_flag() {
+  if printf '%s' "$CONVERTER_HELP" | grep -q -- "$1"; then
+    CONVERTER_FLAGS+=("$@")
+  else
+    echo "    note: converter does not advertise $1, skipping it"
+  fi
+}
+
+add_optional_flag --swift
+add_optional_flag --copy-resources
+add_optional_flag --force
+add_optional_flag --no-prompt
 if [[ "$OPEN_XCODE" -eq 0 ]]; then
-  CONVERTER_FLAGS+=(--no-open)
+  add_optional_flag --no-open
 fi
-CONVERTER_FLAGS+=("${PLATFORM_FLAGS[@]+"${PLATFORM_FLAGS[@]}"}")
+for platform_flag in "${PLATFORM_FLAGS[@]+"${PLATFORM_FLAGS[@]}"}"; do
+  add_optional_flag "$platform_flag"
+done
 
 xcrun safari-web-extension-converter "$PAYLOAD_DIR" "${CONVERTER_FLAGS[@]}"
+
+# Xcode requires an app extension's bundle identifier to be prefixed with its
+# parent app's. The converter does not guarantee that: Xcode 26 derives the app
+# target's identifier from a prefix plus the product name, so passing
+# com.example.app yields an app of com.example.App-Name alongside an extension
+# of com.example.app.Extension, and ValidateEmbeddedBinary fails the build.
+# Pin both to the identifier that was asked for.
+echo "==> Normalizing bundle identifiers and version"
+"$PYTHON" - "$PROJECT_DIR" "$BUNDLE_ID" "$PAYLOAD_DIR/manifest.json" "$BUILD_NUMBER" <<'PY'
+import json
+import pathlib
+import re
+import sys
+
+project_dir, bundle_id, manifest_path, build_number = sys.argv[1:5]
+
+pbxprojs = sorted(pathlib.Path(project_dir).rglob('*.xcodeproj/project.pbxproj'))
+if not pbxprojs:
+    sys.exit(f'error: no project.pbxproj found under {project_dir}')
+
+SETTING = re.compile(r'(PRODUCT_BUNDLE_IDENTIFIER = )([^;]+)(;)')
+
+
+def target_identifier(current):
+    """App targets get the identifier verbatim; extensions get it as a prefix."""
+    trailing = current.strip('"').rsplit('.', 1)[-1]
+    if 'extension' in trailing.lower():
+        return f'{bundle_id}.{trailing}'
+    return bundle_id
+
+
+seen = []
+
+for path in pbxprojs:
+    text = path.read_text()
+
+    def replace(match):
+        new = target_identifier(match.group(2))
+        seen.append((match.group(2), new))
+        return f'{match.group(1)}{new}{match.group(3)}'
+
+    updated, count = SETTING.subn(replace, text)
+    if not count:
+        sys.exit(f'error: {path} declares no PRODUCT_BUNDLE_IDENTIFIER')
+
+    path.write_text(updated)
+
+for old, new in dict.fromkeys(seen):
+    print(f'    {old}  ->  {new}')
+
+final = {new for _, new in seen}
+if not any(identifier == bundle_id for identifier in final):
+    sys.exit(f'error: no target ended up with the app identifier {bundle_id}')
+for identifier in final:
+    if identifier != bundle_id and not identifier.startswith(f'{bundle_id}.'):
+        sys.exit(f'error: {identifier} is not nested under {bundle_id}')
+
+# The App Store shows the app's version, not the extension's. Drive it from
+# manifest.json so a release cannot ship with the two disagreeing.
+version = json.loads(pathlib.Path(manifest_path).read_text())['version']
+
+wanted = {'MARKETING_VERSION': version}
+if build_number:
+    # App Store Connect rejects a re-uploaded build number, so this is only set
+    # when asked for.
+    wanted['CURRENT_PROJECT_VERSION'] = build_number
+
+for setting, value in wanted.items():
+    pattern = re.compile(rf'({setting} = )([^;]+)(;)')
+    total = 0
+    for path in pbxprojs:
+        text = path.read_text()
+        updated, count = pattern.subn(rf'\g<1>{value}\g<3>', text)
+        if count:
+            path.write_text(updated)
+        total += count
+    if total:
+        print(f'    {setting} -> {value}')
+    else:
+        print(f'    warning: no {setting} build setting found; '
+              f'set the version in Xcode before submitting', file=sys.stderr)
+PY
+
+# The converter ships a placeholder app icon. Swap in the real set, which is
+# generated from icons/appicon-source.png by safari/make-appicon.py.
+echo "==> Installing app icons"
+if [[ ! -d "$APPICON_DIR" ]]; then
+  echo "error: $APPICON_DIR is missing; regenerate it with safari/make-appicon.py" >&2
+  exit 1
+fi
+
+appicon_files="$(find "$APPICON_DIR" -type f | wc -l | tr -d ' ')"
+appicon_targets=0
+while IFS= read -r destination; do
+  rm -rf "${destination:?}"/*
+  cp "$APPICON_DIR"/* "$destination/"
+  echo "    $appicon_files files -> ${destination#"$PROJECT_DIR"/}"
+  appicon_targets=$((appicon_targets + 1))
+done < <(find "$PROJECT_DIR" -type d -name 'AppIcon.appiconset')
+
+if [[ "$appicon_targets" -eq 0 ]]; then
+  echo "    warning: no AppIcon.appiconset in the generated project; set the icon in Xcode" >&2
+fi
 
 echo
 echo "==> Done. Xcode project: $PROJECT_DIR"

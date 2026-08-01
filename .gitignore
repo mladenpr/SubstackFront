@@ -3,3 +3,6 @@
 
 # Generated Safari payload and Xcode project
 safari/build/
+
+# Packaged builds
+dist/
