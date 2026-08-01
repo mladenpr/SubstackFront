@@ -27,6 +27,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 PAYLOAD_DIR="$SCRIPT_DIR/build/extension"
 PROJECT_DIR="$SCRIPT_DIR/build/xcode"
+APPICON_DIR="$SCRIPT_DIR/appicon/AppIcon.appiconset"
 
 APP_NAME="Substack Front"
 BUNDLE_ID="com.example.substackfront"
@@ -260,6 +261,27 @@ for setting, value in wanted.items():
         print(f'    warning: no {setting} build setting found; '
               f'set the version in Xcode before submitting', file=sys.stderr)
 PY
+
+# The converter ships a placeholder app icon. Swap in the real set, which is
+# generated from icons/appicon-source.png by safari/make-appicon.py.
+echo "==> Installing app icons"
+if [[ ! -d "$APPICON_DIR" ]]; then
+  echo "error: $APPICON_DIR is missing; regenerate it with safari/make-appicon.py" >&2
+  exit 1
+fi
+
+appicon_files="$(find "$APPICON_DIR" -type f | wc -l | tr -d ' ')"
+appicon_targets=0
+while IFS= read -r destination; do
+  rm -rf "${destination:?}"/*
+  cp "$APPICON_DIR"/* "$destination/"
+  echo "    $appicon_files files -> ${destination#"$PROJECT_DIR"/}"
+  appicon_targets=$((appicon_targets + 1))
+done < <(find "$PROJECT_DIR" -type d -name 'AppIcon.appiconset')
+
+if [[ "$appicon_targets" -eq 0 ]]; then
+  echo "    warning: no AppIcon.appiconset in the generated project; set the icon in Xcode" >&2
+fi
 
 echo
 echo "==> Done. Xcode project: $PROJECT_DIR"

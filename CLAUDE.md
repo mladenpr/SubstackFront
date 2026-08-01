@@ -18,9 +18,11 @@ SubstackFront/
 │   ├── newtab.html
 │   ├── newtab.js
 │   └── newtab.css
-├── icons/                # Extension icons
+├── icons/                # Toolbar icons + appicon-source.png (App Store artwork)
 └── safari/               # Safari port (see safari/README.md)
     ├── manifest.overrides.json  # Safari-only manifest keys
+    ├── appicon/                 # Generated app icon set (committed)
+    ├── make-appicon.py          # Regenerates it; needs Pillow
     └── build.sh                 # Payload assembly + Xcode conversion
 ```
 
@@ -67,6 +69,7 @@ tests/
 ├── background.test.js         # message handling, storage, refresh flow
 ├── manifest.test.js           # Chrome + generated Safari manifests, build.sh
 ├── platform.test.js           # isIOS() behaviour and the popup/newtab copies
+├── appicon.test.js            # icon sizes match Contents.json, none have alpha
 └── syntax.test.js             # every shipped script parses and keeps its guards
 ```
 

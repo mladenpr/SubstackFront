@@ -8,6 +8,8 @@ Safari-specific pieces live in this directory:
 | --- | --- |
 | `manifest.overrides.json` | Safari-specific manifest keys, merged over the root `manifest.json` |
 | `build.sh` | Assembles the Safari payload and runs Apple's Xcode converter |
+| `appicon/` | Generated app icon set, copied into the Xcode project |
+| `make-appicon.py` | Regenerates that set from `icons/appicon-source.png` |
 
 Safari cannot load a bare extension folder. Every Safari web extension ships
 *inside* a native app wrapper, so the build produces an Xcode project containing
@@ -19,9 +21,9 @@ a small host app plus this extension.
   `safari-web-extension-converter` ships with Xcode).
 - **Safari 15.4+** for Manifest V3. Safari 16.4+ is a better target: it fixes
   several MV3 bugs, including background scripts failing to import other scripts.
-- An **Apple Developer Program** membership ($99/year) to distribute. Safari
-  extensions are distributed through the App Store only — there is no
-  side-loadable `.crx` equivalent. Local development works without one.
+- An **Apple Developer Program** membership ($99/year) to distribute. There is
+  no side-loadable `.crx` equivalent — see *Ship it to other people* below.
+  Local development works without one.
 
 ## Build
 
@@ -98,23 +100,41 @@ before. No review queue, but no discoverability either, and it is macOS-only.
      --bundle-identifier com.yourcompany.substackfront \
      --build-number 1
    ```
-4. **Add app icons.** This is the one blocking gap in this repo — see below.
-5. In Xcode, set your team on **both** targets, then **Product → Archive** and
-   **Distribute App**.
-6. Fill in App Store Connect: description, category, screenshots, support URL,
+4. In Xcode, set your team on **both** targets, then **Product → Archive** and
+   **Distribute App**. The app icon is already in place — `build.sh` copies
+   `safari/appicon/AppIcon.appiconset` over the converter's placeholder.
+5. Fill in App Store Connect: description, category, screenshots, support URL,
    privacy policy URL, and the privacy questionnaire. `PRIVACY.md` in the repo
    root has the content; it needs to be hosted somewhere public.
-7. Submit for review.
+6. Submit for review.
 
-### Two things that will trip you up
+### App icons
 
-**App icons.** The App Store needs a full macOS icon set up to 1024×1024. The
-`icons/` directory here only goes up to 128×128 — enough for the toolbar, not
-for the app. Upscaling 128×128 will look bad and can draw a rejection. You need
-a 1024×1024 source image, then drop the generated set into the app target's
-asset catalog. Nothing in this repo can produce that from what it has.
+`icons/appicon-source.png` (1024x1024) is the source artwork. The set Xcode
+needs is generated from it and committed at
+`safari/appicon/AppIcon.appiconset/` — ten macOS sizes from 16x16 up to
+512x512@2x, plus the single 1024x1024 icon iOS uses.
 
-**App Review needs to see it work.** The extension shows nothing until it has
+Regenerate after changing the artwork. This is the only script here that needs a
+third-party package:
+
+```bash
+pip install Pillow
+python3 safari/make-appicon.py
+```
+
+`tests/appicon.test.js` checks every icon's dimensions against `Contents.json`
+and rejects any with an alpha channel — App Store submissions are turned down
+outright for that, and nothing in the Xcode build would catch it.
+
+Note the toolbar icons in `icons/icon{16,48,128}.png` are a different, simpler
+mark. They are what Chrome and Safari show next to the address bar; the app icon
+is what the App Store and the Dock show. Regenerating the toolbar set from the
+same artwork is a design decision, not a build one.
+
+### App Review needs to see it work
+
+The extension shows nothing until it has
 extracted posts from a logged-in Substack inbox, and reviewers will not have a
 Substack account with subscriptions. Supply demo account credentials in the
 review notes, or expect a rejection for "we could not evaluate the
