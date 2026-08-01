@@ -260,10 +260,10 @@ for setting, value in wanted.items():
 PY
 
 # The converter ships a placeholder app icon. Swap in the real set, which is
-# generated from icons/appicon-source.png by safari/make-appicon.py.
+# generated from icons/appicon-source.png by scripts/make-icons.py.
 echo "==> Installing app icons"
 if [[ ! -d "$APPICON_DIR" ]]; then
-  echo "error: $APPICON_DIR is missing; regenerate it with safari/make-appicon.py" >&2
+  echo "error: $APPICON_DIR is missing; regenerate it with scripts/make-icons.py" >&2
   exit 1
 fi
 

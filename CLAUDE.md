@@ -18,15 +18,15 @@ SubstackFront/
 │   ├── newtab.html
 │   ├── newtab.js
 │   └── newtab.css
-├── icons/                # Toolbar icons + appicon-source.png (App Store artwork)
-├── scripts/              # Packaging
+├── icons/                # Toolbar icons + appicon-source.png (artwork source)
+├── scripts/              # Packaging and icon generation
 │   ├── shipping-files.txt      # Single source of truth for what ships
 │   ├── list-shipping-files.sh  # Resolves it; both packagers call this
-│   └── build-chrome.sh         # Chrome Web Store zip -> dist/
+│   ├── build-chrome.sh         # Chrome Web Store zip -> dist/
+│   └── make-icons.py           # Both icon sets from one source; needs Pillow
 └── safari/               # Safari port (see safari/README.md)
     ├── manifest.overrides.json  # Safari-only manifest keys
     ├── appicon/                 # Generated app icon set (committed)
-    ├── make-appicon.py          # Regenerates it; needs Pillow
     └── build.sh                 # Payload assembly + Xcode conversion
 ```
 
@@ -73,11 +73,12 @@ converter and compiles the generated Xcode project.
 ```
 tests/
 ├── helpers/extension-stub.js  # loads background.js into a VM with a stub API
+├── helpers/png.js             # dependency-free PNG reader for the icon tests
 ├── background.test.js         # message handling, storage, refresh flow
 ├── manifest.test.js           # Chrome + generated Safari manifests, build.sh
 ├── packaging.test.js          # shipping-file list, Chrome zip layout
 ├── platform.test.js           # isIOS() behaviour and the popup/newtab copies
-├── appicon.test.js            # icon sizes match Contents.json, none have alpha
+├── icons.test.js              # both icon sets: sizes, opacity, brand colours
 └── syntax.test.js             # every shipped script parses and keeps its guards
 ```
 
@@ -147,8 +148,21 @@ Neither artifact is committed. `dist/` and `safari/build/` are git-ignored, and
 CI attaches the Chrome zip to every green run as an artifact.
 
 Note `icons/` is listed file by file rather than with a glob: it also holds
-`appicon-source.png`, which is App Store artwork for the Mac wrapper app and
-must not end up inside the shipped extension.
+`appicon-source.png`, the artwork both icon sets are generated from, which must
+not end up inside the shipped extension.
+
+## Icons
+
+`icons/appicon-source.png` is the one source. `scripts/make-icons.py` writes
+both sets and the output is committed, so no build needs Pillow:
+
+- `icons/icon{16,48,128}.png` — toolbar icons, rounded with transparent corners.
+- `safari/appicon/AppIcon.appiconset/` — the Mac app icon, full-bleed and opaque.
+
+The artwork is drawn to survive downscaling, so every size is a straight resize.
+`tests/icons.test.js` asserts each icon still contains the brand colours, not
+just that it has the right dimensions — a generator bug once produced a blank
+white icon that passed every header-level check.
 
 ## Releasing
 
