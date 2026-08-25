@@ -113,6 +113,8 @@ async function savePosts(newPosts) {
     console.warn('[SubstackFront] Storage cleanup check failed:', error.message);
   }
 
+  await updateBadge();
+
   console.log(`[SubstackFront] Saved posts - Added: ${addedCount}, Updated: ${updatedCount}, Total: ${allPosts.length}`);
 
   return { added: addedCount, updated: updatedCount, total: allPosts.length };
@@ -127,6 +129,23 @@ async function markPostAsRead(url) {
     post.url === url ? { ...post, isRead: true } : post
   );
   await chrome.storage.local.set({ posts: updated });
+  await updateBadge();
+}
+
+/**
+ * Mark every stored post as read
+ */
+async function markAllPostsAsRead() {
+  const posts = await getStoredPosts();
+  const marked = posts.filter(post => !post.isRead).length;
+  if (marked > 0) {
+    const updated = posts.map(post =>
+      post.isRead ? post : { ...post, isRead: true }
+    );
+    await chrome.storage.local.set({ posts: updated });
+  }
+  await updateBadge();
+  return { marked };
 }
 
 /**
@@ -134,7 +153,30 @@ async function markPostAsRead(url) {
  */
 async function clearAllPosts() {
   await chrome.storage.local.set({ posts: [], lastUpdated: null });
+  await updateBadge();
   console.log('[SubstackFront] All posts cleared');
+}
+
+/**
+ * Show the unread count on the toolbar icon. `action` exists in Chrome MV3 and
+ * Safari 15.4+, but feature-detect anyway, and never let a badge failure break
+ * the storage write that triggered the update.
+ */
+async function updateBadge() {
+  const action = chrome.action;
+  if (!action || typeof action.setBadgeText !== 'function') return;
+
+  try {
+    const posts = await getStoredPosts();
+    const unread = posts.filter(post => !post.isRead).length;
+
+    if (typeof action.setBadgeBackgroundColor === 'function') {
+      await action.setBadgeBackgroundColor({ color: '#8b0000' });
+    }
+    await action.setBadgeText({ text: unread > 0 ? String(unread) : '' });
+  } catch (error) {
+    console.warn('[SubstackFront] Could not update badge:', error.message);
+  }
 }
 
 /**
@@ -432,14 +474,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true; // Keep channel open for async response
 
     case 'GET_POSTS':
-      getStoredPosts()
-        .then(posts => sendResponse({ success: true, posts }))
+      // lastUpdated rides along so the UIs can auto-refresh stale data.
+      Promise.all([getStoredPosts(), chrome.storage.local.get(['lastUpdated'])])
+        .then(([posts, meta]) => sendResponse({ success: true, posts, lastUpdated: meta.lastUpdated || null }))
         .catch(error => sendResponse({ success: false, error: error.message }));
       return true;
 
     case 'MARK_READ':
       markPostAsRead(message.url)
         .then(() => sendResponse({ success: true }))
+        .catch(error => sendResponse({ success: false, error: error.message }));
+      return true;
+
+    case 'MARK_ALL_READ':
+      markAllPostsAsRead()
+        .then(result => sendResponse({ success: true, ...result }))
         .catch(error => sendResponse({ success: false, error: error.message }));
       return true;
 
@@ -493,4 +542,12 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   } catch (error) {
     console.error('[SubstackFront] Could not initialize storage:', error);
   }
+
+  await updateBadge();
+});
+
+// The worker restarts whenever an event wakes it, so recompute the badge on
+// every start rather than trusting whatever text the browser kept around.
+updateBadge().catch(error => {
+  console.warn('[SubstackFront] Badge init failed:', error.message);
 });

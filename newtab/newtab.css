@@ -79,6 +79,36 @@ body {
   outline: 1px solid var(--color-accent);
 }
 
+.search-input {
+  padding: 5px 10px;
+  border: 1px solid var(--color-border-dark);
+  background: var(--color-surface);
+  font-family: var(--font-main);
+  font-size: 0.75rem;
+  color: var(--color-text);
+  width: 180px;
+}
+
+.search-input:focus {
+  outline: 1px solid var(--color-accent);
+}
+
+.unread-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-main);
+  font-size: 0.75rem;
+  color: var(--color-text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.unread-toggle input {
+  accent-color: var(--color-accent);
+  cursor: pointer;
+}
+
 .btn {
   display: inline-flex;
   align-items: center;
@@ -91,6 +121,7 @@ body {
   color: var(--color-text);
   cursor: pointer;
   transition: background 0.12s;
+  white-space: nowrap;
 }
 
 .btn:hover {
@@ -326,6 +357,55 @@ a.btn {
   border-radius: 50%;
 }
 
+/* Hero Card - full-width lead story */
+.post-card.hero {
+  grid-column: 1 / -1;
+  grid-row: span 2;
+  height: calc(var(--card-height) * 2 + var(--gap));
+  flex-direction: row;
+}
+
+.post-card.hero .post-image,
+.post-card.hero .post-image-placeholder {
+  width: 55%;
+  height: 100%;
+  border-bottom: none;
+  border-right: 1px solid var(--color-border);
+}
+
+.post-card.hero .post-image-placeholder {
+  font-size: 3rem;
+}
+
+.post-card.hero .post-content {
+  padding: 20px 24px;
+  gap: 10px;
+}
+
+.post-card.hero .publication-name {
+  font-size: 0.75rem;
+}
+
+.post-card.hero .publication-logo {
+  width: 18px;
+  height: 18px;
+}
+
+.post-card.hero .post-title {
+  font-size: 1.5rem;
+  -webkit-line-clamp: 3;
+}
+
+.post-card.hero .post-subtitle {
+  font-size: 0.9rem;
+  line-height: 1.45;
+  -webkit-line-clamp: 5;
+}
+
+.post-card.hero .post-meta {
+  font-size: 0.7rem;
+}
+
 /* Footer */
 .footer {
   flex-shrink: 0;
@@ -362,6 +442,35 @@ a.btn {
     padding: 8px;
   }
 
+  .search-input {
+    width: 120px;
+  }
+
+  /* Narrow screens: stack the hero vertically instead of side by side */
+  .post-card.hero {
+    flex-direction: column;
+  }
+
+  .post-card.hero .post-image,
+  .post-card.hero .post-image-placeholder {
+    width: 100%;
+    height: 50%;
+    border-right: none;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .post-card.hero .post-content {
+    padding: 12px 14px;
+    gap: 6px;
+  }
+
+  .post-card.hero .post-title {
+    font-size: 1.1rem;
+  }
+
+  .post-card.hero .post-subtitle {
+    -webkit-line-clamp: 3;
+  }
 }
 
 /* Toast Notifications */

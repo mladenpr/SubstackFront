@@ -11,9 +11,21 @@
     <div class="header-content">
       <h1 class="logo">SubstackFront</h1>
       <div class="header-actions">
+        <input type="search" id="search-input" class="search-input" placeholder="Search posts&hellip;" autocomplete="off">
+        <label class="unread-toggle" title="Show unread posts only">
+          <input type="checkbox" id="unread-only">
+          Unread only
+        </label>
         <select id="publication-filter" class="filter-select">
           <option value="">All Publications</option>
         </select>
+        <button id="mark-all-read-btn" class="btn btn-secondary" title="Mark every post as read">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 6 7 17l-5-5"/>
+            <path d="m22 10-7.5 7.5L13 16"/>
+          </svg>
+          Mark all read
+        </button>
         <button id="refresh-btn" class="btn btn-secondary" title="Visit Substack to refresh">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M23 4v6h-6M1 20v-6h6"/>
@@ -42,6 +54,12 @@
       </div>
       <h2>No posts yet</h2>
       <p>Visit <a href="https://substack.com/inbox" target="_blank">your Substack inbox</a> to start collecting posts.</p>
+    </div>
+
+    <!-- No Results State (posts exist, but search/filters exclude them all) -->
+    <div id="no-results" class="empty-state hidden">
+      <h2>No matching posts</h2>
+      <p>Try a different search, or clear the filters.</p>
     </div>
 
     <!-- Post Grid -->

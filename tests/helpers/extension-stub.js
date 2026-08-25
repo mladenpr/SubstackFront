@@ -53,11 +53,12 @@ function createChromeStub(options = {}) {
     getBytesInUse = false,
     failGetAll = false,
     initialStore = {},
-    onTabMessage = null
+    onTabMessage = null,
+    action = false
   } = options;
 
   const store = { ...initialStore };
-  const calls = { tabsCreated: [], tabsRemoved: [], tabMessages: [] };
+  const calls = { tabsCreated: [], tabsRemoved: [], tabMessages: [], badgeTexts: [], badgeColors: [] };
   const listeners = { message: [], installed: [], tabUpdated: [] };
   let nextTabId = 100;
 
@@ -125,6 +126,15 @@ function createChromeStub(options = {}) {
     }
   };
 
+  // The badge API. Absent by default so every test exercises the
+  // feature-detect guard; pass { action: true } to record badge calls.
+  if (action) {
+    chrome.action = {
+      async setBadgeText({ text }) { calls.badgeTexts.push(text); },
+      async setBadgeBackgroundColor({ color }) { calls.badgeColors.push(color); }
+    };
+  }
+
   return { chrome, store, calls, listeners };
 }
 
@@ -133,6 +143,7 @@ function createChromeStub(options = {}) {
  *
  * @param {object} options
  * @param {boolean} options.getBytesInUse - expose storage.local.getBytesInUse (Chrome shape)
+ * @param {boolean} options.action        - expose chrome.action and record badge calls
  * @param {boolean} options.failGetAll    - make storage.local.get(null) throw
  * @param {object}  options.initialStore   - seed chrome.storage.local
  * @param {Function} options.onTabMessage  - handle tabs.sendMessage; throws by default

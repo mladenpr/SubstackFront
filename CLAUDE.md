@@ -35,7 +35,12 @@ SubstackFront/
 - **Content Script**: Parses Substack feed pages to extract post data (title, image, URL, etc.)
 - **Background Worker**: Receives posts from content script, deduplicates, stores in chrome.storage.local
 - **Popup**: Compact grid of cached posts, plus Refresh and a link to the tab view
-- **Tab View** (`newtab/`): Reads from storage, displays posts in a tiled grid with a publication filter
+- **Tab View** (`newtab/`): Reads from storage; a full-width hero card leads (newest
+  unread post), the rest tile below. Filter by publication, search, unread-only
+  toggle, and Mark all read
+- Both UIs auto-refresh on open when the cache is older than an hour (never on
+  iOS), and the background worker keeps the unread count on the toolbar badge
+  (feature-detected `chrome.action`)
 
 ## Development
 
@@ -131,9 +136,9 @@ fork a source file into `safari/` — put the difference in
   is the only thing standing between a Safari-only regression and the App Store.
 - iOS cannot do background refresh at all (Safari ignores `active: false` in
   `tabs.create`), so the popup and tab view swap Refresh for a link to the
-  inbox there. `isIOS()` is duplicated in both files — matching how
-  `escapeHtml`/`formatRelativeDate` already are — and pinned together by
-  `tests/platform.test.js`.
+  inbox there. `isIOS()` and `maybeAutoRefresh()` are duplicated in both files —
+  matching how `escapeHtml`/`formatRelativeDate` already are — and pinned
+  together by `tests/platform.test.js`.
 
 ## Packaging
 
@@ -177,4 +182,7 @@ at the Web Store developer dashboard.
 ## Data Model
 
 Posts are stored with: `id`, `title`, `subtitle`, `publication`, `publicationLogo`,
-`author`, `coverImage`, `url`, `publishedAt`, `isRead`, `extractedAt`
+`author`, `readTime`, `coverImage`, `url`, `publishedAt`, `isRead`, `extractedAt`
+
+`readTime` is the inbox's "X min read" label (`null` when absent — including on
+posts cached before it existed, so UIs must treat it as optional).

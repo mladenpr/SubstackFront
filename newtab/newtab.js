@@ -12,16 +12,26 @@
   // DOM Elements
   const loadingEl = document.getElementById('loading');
   const emptyStateEl = document.getElementById('empty-state');
+  const noResultsEl = document.getElementById('no-results');
   const postGridEl = document.getElementById('post-grid');
   const publicationFilterEl = document.getElementById('publication-filter');
+  const searchInputEl = document.getElementById('search-input');
+  const unreadOnlyEl = document.getElementById('unread-only');
+  const markAllReadBtnEl = document.getElementById('mark-all-read-btn');
   const refreshBtnEl = document.getElementById('refresh-btn');
   const statsEl = document.getElementById('stats');
   const toastEl = document.getElementById('toast');
   const toastMessageEl = toastEl.querySelector('.toast-message');
 
+  // Auto-refresh when the cache is older than this. Kept in sync with the copy
+  // in popup/popup.js - tests/platform.test.js fails if the two drift apart.
+  const STALE_REFRESH_THRESHOLD_MS = 60 * 60 * 1000;
+
   // State
   let allPosts = [];
   let currentFilter = '';
+  let searchQuery = '';
+  let unreadOnly = false;
   let toastTimeout = null;
 
   /**
@@ -88,10 +98,12 @@
 
   /**
    * Create post card HTML
+   * @param {object} post
+   * @param {boolean} isHero - Render as the full-width lead story
    */
-  function createPostCard(post) {
+  function createPostCard(post, isHero = false) {
     const card = document.createElement('article');
-    card.className = `post-card${post.isRead ? ' read' : ''}`;
+    card.className = `post-card${post.isRead ? ' read' : ''}${isHero ? ' hero' : ''}`;
     card.dataset.url = post.url;
 
     const imageHtml = post.coverImage
@@ -112,7 +124,7 @@
         <h2 class="post-title">${escapeHtml(post.title)}</h2>
         ${post.subtitle ? `<p class="post-subtitle">${escapeHtml(post.subtitle)}</p>` : ''}
         <div class="post-meta">
-          <span class="post-date">${formatRelativeDate(post.publishedAt)}</span>
+          <span class="post-date">${formatRelativeDate(post.publishedAt)}${post.readTime ? ` &middot; ${escapeHtml(post.readTime)}` : ''}</span>
           ${!post.isRead ? '<span class="unread-dot" title="Unread"></span>' : ''}
         </div>
       </div>
@@ -138,22 +150,33 @@
   }
 
   /**
-   * Render posts to grid
+   * Render posts to grid, leading with a full-width hero card
    */
   function renderPosts(posts) {
     postGridEl.innerHTML = '';
 
     if (posts.length === 0) {
       postGridEl.classList.add('hidden');
-      emptyStateEl.classList.remove('hidden');
+      // Distinguish an empty cache from filters that exclude everything.
+      if (allPosts.length > 0) {
+        emptyStateEl.classList.add('hidden');
+        noResultsEl.classList.remove('hidden');
+      } else {
+        noResultsEl.classList.add('hidden');
+        emptyStateEl.classList.remove('hidden');
+      }
       return;
     }
 
     emptyStateEl.classList.add('hidden');
+    noResultsEl.classList.add('hidden');
     postGridEl.classList.remove('hidden');
 
-    posts.forEach((post) => {
-      const card = createPostCard(post);
+    // Lead story: the newest unread post, or the newest post when all are read.
+    const heroPost = posts.find(post => !post.isRead) || posts[0];
+
+    [heroPost, ...posts.filter(post => post !== heroPost)].forEach((post) => {
+      const card = createPostCard(post, post === heroPost);
       postGridEl.appendChild(card);
     });
   }
@@ -189,13 +212,25 @@
   }
 
   /**
-   * Filter posts
+   * Filter posts by publication, read state and search query
    */
   function filterPosts() {
     let filtered = allPosts;
 
     if (currentFilter) {
-      filtered = allPosts.filter(p => p.publication === currentFilter);
+      filtered = filtered.filter(p => p.publication === currentFilter);
+    }
+
+    if (unreadOnly) {
+      filtered = filtered.filter(p => !p.isRead);
+    }
+
+    const query = searchQuery.trim().toLowerCase();
+    if (query) {
+      filtered = filtered.filter(p =>
+        [p.title, p.subtitle, p.author, p.publication]
+          .some(field => (field || '').toLowerCase().includes(query))
+      );
     }
 
     renderPosts(filtered);
@@ -203,8 +238,11 @@
 
   /**
    * Load posts from storage
+   * @param {boolean} autoRefreshIfStale - Kick off a refresh when the cache is
+   *   old. Only the initial load passes true; a refresh reloads through here
+   *   and must not trigger itself again.
    */
-  async function loadPosts() {
+  async function loadPosts(autoRefreshIfStale = false) {
     try {
       const response = await chrome.runtime.sendMessage({ type: 'GET_POSTS' });
 
@@ -215,6 +253,10 @@
         updatePublicationFilter(allPosts);
         updateStats(allPosts);
         filterPosts();
+
+        if (autoRefreshIfStale) {
+          maybeAutoRefresh(response.lastUpdated);
+        }
       } else {
         throw new Error(response.error || 'Failed to load posts');
       }
@@ -222,6 +264,48 @@
       console.error('[SubstackFront] Error loading posts:', error);
       loadingEl.classList.add('hidden');
       emptyStateEl.classList.remove('hidden');
+    }
+  }
+
+  /**
+   * Refresh automatically when the cache has gone stale. Kept in sync with the
+   * copy in popup/popup.js - tests/platform.test.js fails if the two drift
+   * apart.
+   */
+  function maybeAutoRefresh(lastUpdated) {
+    // iOS swaps the Refresh button for an inbox link - no background refresh.
+    if (isIOS()) return;
+    // Never refreshed at all: the empty state already points at the inbox, and
+    // opening a Substack tab before first use would be a surprise.
+    if (!lastUpdated) return;
+    const age = Date.now() - new Date(lastUpdated).getTime();
+    if (Number.isNaN(age) || age < STALE_REFRESH_THRESHOLD_MS) return;
+    console.log('[SubstackFront] Cached posts are stale, refreshing...');
+    handleRefresh();
+  }
+
+  /**
+   * Mark every post as read
+   */
+  async function handleMarkAllRead() {
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'MARK_ALL_READ' });
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to mark all as read');
+      }
+
+      allPosts.forEach(post => { post.isRead = true; });
+      updateStats(allPosts);
+      filterPosts();
+
+      const marked = response.marked || 0;
+      showToast(
+        marked > 0 ? `Marked ${marked} post${marked === 1 ? '' : 's'} as read` : 'Everything is already read',
+        marked > 0 ? 'success' : 'info'
+      );
+    } catch (error) {
+      console.error('[SubstackFront] Error marking all as read:', error);
+      showToast('Mark all read failed: ' + error.message, 'error');
     }
   }
 
@@ -256,17 +340,10 @@
    * Refresh feed in background
    */
   async function handleRefresh() {
-    // Disable button and show loading state
+    // Spin the icon in place - swapping in a longer "Refreshing..." label used
+    // to resize the button and jolt the whole header bar.
     refreshBtnEl.disabled = true;
     refreshBtnEl.classList.add('loading');
-    const originalText = refreshBtnEl.innerHTML;
-    refreshBtnEl.innerHTML = `
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M23 4v6h-6M1 20v-6h6"/>
-        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-      </svg>
-      Refreshing...
-    `;
 
     try {
       const response = await chrome.runtime.sendMessage({ type: 'REFRESH_FEED' });
@@ -288,10 +365,8 @@
       console.error('[SubstackFront] Refresh error:', error);
       showToast('Refresh failed: ' + error.message, 'error');
     } finally {
-      // Restore button
       refreshBtnEl.disabled = false;
       refreshBtnEl.classList.remove('loading');
-      refreshBtnEl.innerHTML = originalText;
     }
   }
 
@@ -335,6 +410,18 @@
     filterPosts();
   });
 
+  searchInputEl.addEventListener('input', (e) => {
+    searchQuery = e.target.value;
+    filterPosts();
+  });
+
+  unreadOnlyEl.addEventListener('change', (e) => {
+    unreadOnly = e.target.checked;
+    filterPosts();
+  });
+
+  markAllReadBtnEl.addEventListener('click', handleMarkAllRead);
+
   if (isIOS()) {
     replaceRefreshWithInboxLink();
   } else {
@@ -352,6 +439,6 @@
   });
 
   // Initialize
-  loadPosts();
+  loadPosts(true);
 
 })();

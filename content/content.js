@@ -173,15 +173,20 @@
       const dateText = dateElement?.textContent?.trim();
       const publishedAt = parseRelativeDate(dateText);
 
-      // Author from meta: .reader2-item-meta (contains "Author • X min read")
+      // Author and read time from meta: .reader2-item-meta ("Author ∙ X min read")
       const metaElement = postLink.querySelector('.reader2-item-meta');
       let author = '';
+      let readTime = null;
       if (metaElement) {
         const metaText = metaElement.textContent;
         // Extract author name (before the bullet point)
         const parts = metaText.split('∙');
         if (parts.length > 0) {
           author = parts[0].trim();
+        }
+        const readTimeMatch = metaText.match(/\d+\s*(?:min|hr|hour)s?\s*read/i);
+        if (readTimeMatch) {
+          readTime = readTimeMatch[0].replace(/\s+/g, ' ').trim();
         }
       }
 
@@ -199,6 +204,7 @@
         publication,
         publicationLogo,
         author,
+        readTime,
         coverImage,
         url,
         publishedAt,

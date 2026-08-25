@@ -68,3 +68,82 @@ test('the refresh button is only wired up off iOS', () => {
       `${file} must only attach the refresh handler on the non-iOS branch`);
   }
 });
+
+// maybeAutoRefresh() is duplicated the same way as isIOS(), and its iOS guard
+// is what keeps the popup and tab view from auto-opening a foreground Substack
+// tab on iOS. Pin the copies together and exercise the logic.
+
+/** Pull the source of maybeAutoRefresh() out of a UI script. */
+function extractMaybeAutoRefresh(relativePath) {
+  const source = fs.readFileSync(path.join(REPO_ROOT, relativePath), 'utf8');
+  const match = source.match(/ {2}function maybeAutoRefresh\(lastUpdated\) \{\n(?:.*\n)*? {2}\}\n/);
+  assert.ok(match, `${relativePath} has no maybeAutoRefresh() function`);
+  return match[0];
+}
+
+/** Pull the staleness threshold constant out of a UI script. */
+function extractStaleThreshold(relativePath) {
+  const source = fs.readFileSync(path.join(REPO_ROOT, relativePath), 'utf8');
+  const match = source.match(/const STALE_REFRESH_THRESHOLD_MS = [^;]+;/);
+  assert.ok(match, `${relativePath} has no STALE_REFRESH_THRESHOLD_MS constant`);
+  return match[0];
+}
+
+test('the two copies of maybeAutoRefresh() have not drifted', () => {
+  const [popup, newtab] = COPIES.map(extractMaybeAutoRefresh);
+  assert.equal(popup, newtab,
+    'popup/popup.js and newtab/newtab.js must carry an identical maybeAutoRefresh()');
+  const [popupMs, newtabMs] = COPIES.map(extractStaleThreshold);
+  assert.equal(popupMs, newtabMs,
+    'the two copies of STALE_REFRESH_THRESHOLD_MS must match');
+});
+
+/**
+ * Run a copy of maybeAutoRefresh() against a fake navigator and clock.
+ * Returns whether handleRefresh() was called.
+ */
+function runMaybeAutoRefresh(lastUpdated, navigator) {
+  const functions = extractIsIOS(COPIES[0])
+    + extractStaleThreshold(COPIES[0])
+    + '\n'
+    + extractMaybeAutoRefresh(COPIES[0]);
+
+  const context = vm.createContext({
+    navigator,
+    Date,
+    Number,
+    console: { log() {} },
+    refreshed: false,
+    handleRefresh() { context.refreshed = true; }
+  });
+  vm.runInContext(`${functions}\nmaybeAutoRefresh(${JSON.stringify(lastUpdated)});`, context);
+  return context.refreshed;
+}
+
+const DESKTOP = { userAgent: 'Mozilla/5.0 (X11; Linux x86_64) Chrome/130.0.0.0', maxTouchPoints: 0 };
+const IOS = { userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_3 like Mac OS X) Safari/604.1', maxTouchPoints: 5 };
+
+test('maybeAutoRefresh() refreshes stale data on desktop', () => {
+  const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+  assert.equal(runMaybeAutoRefresh(twoHoursAgo, DESKTOP), true);
+});
+
+test('maybeAutoRefresh() leaves fresh data alone', () => {
+  const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  assert.equal(runMaybeAutoRefresh(tenMinutesAgo, DESKTOP), false);
+});
+
+test('maybeAutoRefresh() never runs before the first manual refresh', () => {
+  assert.equal(runMaybeAutoRefresh(null, DESKTOP), false);
+});
+
+test('maybeAutoRefresh() ignores an unparseable timestamp', () => {
+  assert.equal(runMaybeAutoRefresh('not-a-date', DESKTOP), false);
+});
+
+test('maybeAutoRefresh() never runs on iOS', () => {
+  // Safari on iOS foregrounds the refresh tab, so stale data must wait for the
+  // user to follow the inbox link instead.
+  const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+  assert.equal(runMaybeAutoRefresh(twoHoursAgo, IOS), false);
+});
