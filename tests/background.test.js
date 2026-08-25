@@ -160,6 +160,67 @@ test('clears all posts', async () => {
   assert.deepEqual(plain(posts), []);
 });
 
+test('marks all posts as read and reports how many changed', async () => {
+  const ext = loadBackground();
+  await ext.sendMessage({ type: 'POSTS_EXTRACTED', posts: [makePost(1), makePost(2), makePost(3)] });
+  await ext.sendMessage({ type: 'MARK_READ', url: makePost(1).url });
+
+  const response = await ext.sendMessage({ type: 'MARK_ALL_READ' });
+
+  assert.equal(response.success, true);
+  assert.equal(response.marked, 2, 'only the posts that were unread count');
+  const { posts } = await ext.sendMessage({ type: 'GET_POSTS' });
+  assert.ok(plain(posts).every(p => p.isRead));
+
+  // Idempotent: a second pass changes nothing.
+  const again = await ext.sendMessage({ type: 'MARK_ALL_READ' });
+  assert.equal(again.marked, 0);
+});
+
+test('GET_POSTS carries lastUpdated so the UIs can spot stale data', async () => {
+  const ext = loadBackground();
+
+  const before = await ext.sendMessage({ type: 'GET_POSTS' });
+  assert.equal(before.lastUpdated, null, 'no refresh yet means null, not undefined');
+
+  await ext.sendMessage({ type: 'POSTS_EXTRACTED', posts: [makePost(1)] });
+
+  const after = await ext.sendMessage({ type: 'GET_POSTS' });
+  assert.ok(!Number.isNaN(new Date(after.lastUpdated).getTime()),
+    `expected a parseable timestamp, got ${after.lastUpdated}`);
+});
+
+test('keeps the toolbar badge on the unread count when chrome.action exists', async () => {
+  const ext = loadBackground({ action: true });
+
+  await ext.sendMessage({ type: 'POSTS_EXTRACTED', posts: [makePost(1), makePost(2)] });
+  assert.equal(ext.calls.badgeTexts.at(-1), '2');
+
+  await ext.sendMessage({ type: 'MARK_READ', url: makePost(1).url });
+  assert.equal(ext.calls.badgeTexts.at(-1), '1');
+
+  await ext.sendMessage({ type: 'MARK_ALL_READ' });
+  assert.equal(ext.calls.badgeTexts.at(-1), '', 'zero unread must clear the badge, not show "0"');
+
+  await ext.sendMessage({ type: 'POSTS_EXTRACTED', posts: [makePost(3)] });
+  assert.equal(ext.calls.badgeTexts.at(-1), '1');
+
+  await ext.sendMessage({ type: 'CLEAR_POSTS' });
+  assert.equal(ext.calls.badgeTexts.at(-1), '');
+});
+
+test('a missing chrome.action does not break saves or reads', async () => {
+  // The default stub has no chrome.action, so the badge update must
+  // feature-detect and stay out of the way.
+  const ext = loadBackground();
+
+  const saved = await ext.sendMessage({ type: 'POSTS_EXTRACTED', posts: [makePost(1)] });
+  assert.equal(saved.success, true);
+
+  const marked = await ext.sendMessage({ type: 'MARK_ALL_READ' });
+  assert.equal(marked.success, true);
+});
+
 test('answers unknown message types instead of hanging', async () => {
   const ext = loadBackground();
   const response = await ext.sendMessage({ type: 'NOT_A_REAL_MESSAGE' });

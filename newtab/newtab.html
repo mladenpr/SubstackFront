@@ -11,9 +11,49 @@
     <div class="header-content">
       <h1 class="logo">SubstackFront</h1>
       <div class="header-actions">
+        <div id="layout-toggle" class="layout-toggle" role="group" aria-label="Layout">
+          <button type="button" data-layout="magazine" title="Magazine layout">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="3" y="3" width="11" height="11"/>
+              <rect x="16" y="3" width="5" height="5"/>
+              <rect x="16" y="10" width="5" height="4"/>
+              <rect x="3" y="16" width="8" height="5"/>
+              <rect x="13" y="16" width="8" height="5"/>
+            </svg>
+          </button>
+          <button type="button" data-layout="grid" title="Uniform grid">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="3" y="3" width="8" height="8"/>
+              <rect x="13" y="3" width="8" height="8"/>
+              <rect x="3" y="13" width="8" height="8"/>
+              <rect x="13" y="13" width="8" height="8"/>
+            </svg>
+          </button>
+          <button type="button" data-layout="publications" title="Group by publication">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="3" y="3" width="10" height="3"/>
+              <rect x="3" y="8" width="18" height="2"/>
+              <rect x="3" y="12" width="18" height="2"/>
+              <rect x="3" y="17" width="10" height="3"/>
+              <rect x="3" y="22" width="18" height="2"/>
+            </svg>
+          </button>
+        </div>
+        <input type="search" id="search-input" class="search-input" placeholder="Search posts&hellip;" autocomplete="off">
+        <label class="unread-toggle" title="Show unread posts only">
+          <input type="checkbox" id="unread-only">
+          Unread only
+        </label>
         <select id="publication-filter" class="filter-select">
           <option value="">All Publications</option>
         </select>
+        <button id="mark-all-read-btn" class="btn btn-secondary" title="Mark every post as read">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 6 7 17l-5-5"/>
+            <path d="m22 10-7.5 7.5L13 16"/>
+          </svg>
+          Mark all read
+        </button>
         <button id="refresh-btn" class="btn btn-secondary" title="Visit Substack to refresh">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M23 4v6h-6M1 20v-6h6"/>
@@ -42,6 +82,12 @@
       </div>
       <h2>No posts yet</h2>
       <p>Visit <a href="https://substack.com/inbox" target="_blank">your Substack inbox</a> to start collecting posts.</p>
+    </div>
+
+    <!-- No Results State (posts exist, but search/filters exclude them all) -->
+    <div id="no-results" class="empty-state hidden">
+      <h2>No matching posts</h2>
+      <p>Try a different search, or clear the filters.</p>
     </div>
 
     <!-- Post Grid -->

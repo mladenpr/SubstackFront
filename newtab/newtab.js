@@ -12,16 +12,30 @@
   // DOM Elements
   const loadingEl = document.getElementById('loading');
   const emptyStateEl = document.getElementById('empty-state');
+  const noResultsEl = document.getElementById('no-results');
   const postGridEl = document.getElementById('post-grid');
   const publicationFilterEl = document.getElementById('publication-filter');
+  const layoutToggleEl = document.getElementById('layout-toggle');
+  const searchInputEl = document.getElementById('search-input');
+  const unreadOnlyEl = document.getElementById('unread-only');
+  const markAllReadBtnEl = document.getElementById('mark-all-read-btn');
   const refreshBtnEl = document.getElementById('refresh-btn');
   const statsEl = document.getElementById('stats');
   const toastEl = document.getElementById('toast');
   const toastMessageEl = toastEl.querySelector('.toast-message');
 
+  // Auto-refresh when the cache is older than this. Kept in sync with the copy
+  // in popup/popup.js - tests/platform.test.js fails if the two drift apart.
+  const STALE_REFRESH_THRESHOLD_MS = 60 * 60 * 1000;
+
   // State
   let allPosts = [];
   let currentFilter = '';
+  let searchQuery = '';
+  let unreadOnly = false;
+  // 'magazine' (mixed card sizes), 'grid' (uniform), or 'publications'
+  // (alphabetical groups of compact rows)
+  let layoutMode = 'magazine';
   let toastTimeout = null;
 
   /**
@@ -88,10 +102,13 @@
 
   /**
    * Create post card HTML
+   * @param {object} post
+   * @param {string} variant - '' for a standard card, 'featured' (2x2) or
+   *   'wide' (2x1) in the magazine layout
    */
-  function createPostCard(post) {
+  function createPostCard(post, variant = '') {
     const card = document.createElement('article');
-    card.className = `post-card${post.isRead ? ' read' : ''}`;
+    card.className = `post-card${post.isRead ? ' read' : ''}${variant ? ` ${variant}` : ''}`;
     card.dataset.url = post.url;
 
     const imageHtml = post.coverImage
@@ -112,7 +129,7 @@
         <h2 class="post-title">${escapeHtml(post.title)}</h2>
         ${post.subtitle ? `<p class="post-subtitle">${escapeHtml(post.subtitle)}</p>` : ''}
         <div class="post-meta">
-          <span class="post-date">${formatRelativeDate(post.publishedAt)}</span>
+          <span class="post-date">${formatRelativeDate(post.publishedAt)}${post.readTime ? ` &middot; ${escapeHtml(post.readTime)}` : ''}</span>
           ${!post.isRead ? '<span class="unread-dot" title="Unread"></span>' : ''}
         </div>
       </div>
@@ -138,23 +155,128 @@
   }
 
   /**
-   * Render posts to grid
+   * Card size for a position in the magazine layout. A featured card leads
+   * each block of eleven with a wide card mid-block; sizes stay moderate so
+   * low-resolution cover images are never blown up to full width.
+   * grid-auto-flow: dense backfills the cells the spans leave behind.
+   *
+   * Posts without a cover image stay standard size - a blown-up placeholder
+   * looks worse than a small one - and big slots are skipped near the end of
+   * the list, where too few cards remain to fill in around them.
+   */
+  function magazineVariant(post, index, total) {
+    if (!post.coverImage) return '';
+    if (index % 11 === 0 && total - index >= 5) return 'featured';
+    if (index % 11 === 5 && total - index >= 2) return 'wide';
+    return '';
+  }
+
+  /**
+   * Compact row for the by-publication layout: small thumbnail, one-line
+   * title, meta. Shares .read/.unread-dot/data-url with the cards so
+   * markAsRead() updates rows the same way.
+   */
+  function createPostRow(post) {
+    const row = document.createElement('article');
+    row.className = `post-row${post.isRead ? ' read' : ''}`;
+    row.dataset.url = post.url;
+
+    const thumbHtml = post.coverImage
+      ? `<img class="post-row-thumb" src="${post.coverImage}" alt="" loading="lazy">`
+      : `<div class="post-row-thumb post-row-thumb-placeholder">${getInitial(post.publication)}</div>`;
+
+    const metaParts = [formatRelativeDate(post.publishedAt), post.readTime, post.author]
+      .filter(Boolean)
+      .map(escapeHtml)
+      .join(' &middot; ');
+
+    row.innerHTML = `
+      ${thumbHtml}
+      <div class="post-row-body">
+        <h3 class="post-row-title">${escapeHtml(post.title)}</h3>
+        <div class="post-row-meta">${metaParts}</div>
+      </div>
+      ${!post.isRead ? '<span class="unread-dot" title="Unread"></span>' : ''}
+    `;
+
+    row.addEventListener('click', () => {
+      markAsRead(post.url);
+      window.open(post.url, '_blank');
+    });
+
+    return row;
+  }
+
+  /**
+   * Render posts grouped under their publication, publications in
+   * alphabetical order, posts newest first within each group
+   */
+  function renderGroupedPosts(posts) {
+    const groups = new Map();
+    posts.forEach(post => {
+      if (!groups.has(post.publication)) groups.set(post.publication, []);
+      groups.get(post.publication).push(post);
+    });
+
+    const names = [...groups.keys()]
+      .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+
+    names.forEach(name => {
+      const groupPosts = groups.get(name);
+      const unread = groupPosts.filter(p => !p.isRead).length;
+      const logo = groupPosts.find(p => p.publicationLogo)?.publicationLogo;
+
+      const section = document.createElement('section');
+      section.className = 'pub-group';
+
+      const header = document.createElement('header');
+      header.className = 'pub-group-header';
+      header.innerHTML = `
+        ${logo ? `<img class="pub-group-logo" src="${logo}" alt="">` : ''}
+        <h2 class="pub-group-name">${escapeHtml(name)}</h2>
+        <span class="pub-group-count">${groupPosts.length} post${groupPosts.length === 1 ? '' : 's'}${unread > 0 ? ` &middot; ${unread} unread` : ''}</span>
+      `;
+      section.appendChild(header);
+
+      groupPosts.forEach(post => section.appendChild(createPostRow(post)));
+      postGridEl.appendChild(section);
+    });
+  }
+
+  /**
+   * Render posts as a mixed-size magazine mosaic, a uniform grid, or
+   * publication groups
    */
   function renderPosts(posts) {
     postGridEl.innerHTML = '';
+    postGridEl.classList.toggle('magazine', layoutMode === 'magazine');
+    postGridEl.classList.toggle('grouped', layoutMode === 'publications');
 
     if (posts.length === 0) {
       postGridEl.classList.add('hidden');
-      emptyStateEl.classList.remove('hidden');
+      // Distinguish an empty cache from filters that exclude everything.
+      if (allPosts.length > 0) {
+        emptyStateEl.classList.add('hidden');
+        noResultsEl.classList.remove('hidden');
+      } else {
+        noResultsEl.classList.add('hidden');
+        emptyStateEl.classList.remove('hidden');
+      }
       return;
     }
 
     emptyStateEl.classList.add('hidden');
+    noResultsEl.classList.add('hidden');
     postGridEl.classList.remove('hidden');
 
-    posts.forEach((post) => {
-      const card = createPostCard(post);
-      postGridEl.appendChild(card);
+    if (layoutMode === 'publications') {
+      renderGroupedPosts(posts);
+      return;
+    }
+
+    posts.forEach((post, index) => {
+      const variant = layoutMode === 'magazine' ? magazineVariant(post, index, posts.length) : '';
+      postGridEl.appendChild(createPostCard(post, variant));
     });
   }
 
@@ -189,13 +311,25 @@
   }
 
   /**
-   * Filter posts
+   * Filter posts by publication, read state and search query
    */
   function filterPosts() {
     let filtered = allPosts;
 
     if (currentFilter) {
-      filtered = allPosts.filter(p => p.publication === currentFilter);
+      filtered = filtered.filter(p => p.publication === currentFilter);
+    }
+
+    if (unreadOnly) {
+      filtered = filtered.filter(p => !p.isRead);
+    }
+
+    const query = searchQuery.trim().toLowerCase();
+    if (query) {
+      filtered = filtered.filter(p =>
+        [p.title, p.subtitle, p.author, p.publication]
+          .some(field => (field || '').toLowerCase().includes(query))
+      );
     }
 
     renderPosts(filtered);
@@ -203,8 +337,11 @@
 
   /**
    * Load posts from storage
+   * @param {boolean} autoRefreshIfStale - Kick off a refresh when the cache is
+   *   old. Only the initial load passes true; a refresh reloads through here
+   *   and must not trigger itself again.
    */
-  async function loadPosts() {
+  async function loadPosts(autoRefreshIfStale = false) {
     try {
       const response = await chrome.runtime.sendMessage({ type: 'GET_POSTS' });
 
@@ -215,6 +352,10 @@
         updatePublicationFilter(allPosts);
         updateStats(allPosts);
         filterPosts();
+
+        if (autoRefreshIfStale) {
+          maybeAutoRefresh(response.lastUpdated);
+        }
       } else {
         throw new Error(response.error || 'Failed to load posts');
       }
@@ -222,6 +363,87 @@
       console.error('[SubstackFront] Error loading posts:', error);
       loadingEl.classList.add('hidden');
       emptyStateEl.classList.remove('hidden');
+    }
+  }
+
+  /**
+   * Refresh automatically when the cache has gone stale. Kept in sync with the
+   * copy in popup/popup.js - tests/platform.test.js fails if the two drift
+   * apart.
+   */
+  function maybeAutoRefresh(lastUpdated) {
+    // iOS swaps the Refresh button for an inbox link - no background refresh.
+    if (isIOS()) return;
+    // Never refreshed at all: the empty state already points at the inbox, and
+    // opening a Substack tab before first use would be a surprise.
+    if (!lastUpdated) return;
+    const age = Date.now() - new Date(lastUpdated).getTime();
+    if (Number.isNaN(age) || age < STALE_REFRESH_THRESHOLD_MS) return;
+    console.log('[SubstackFront] Cached posts are stale, refreshing...');
+    handleRefresh();
+  }
+
+  /**
+   * Load the saved layout preference. Defaults to magazine when unset or when
+   * storage is unavailable.
+   */
+  async function loadLayoutMode() {
+    try {
+      const result = await chrome.storage.local.get(['layoutMode']);
+      if (['magazine', 'grid', 'publications'].includes(result.layoutMode)) {
+        layoutMode = result.layoutMode;
+      }
+    } catch (error) {
+      console.warn('[SubstackFront] Could not read layout preference:', error.message);
+    }
+    updateLayoutToggle();
+  }
+
+  function updateLayoutToggle() {
+    layoutToggleEl.querySelectorAll('button').forEach(button => {
+      button.classList.toggle('active', button.dataset.layout === layoutMode);
+    });
+  }
+
+  function setLayoutMode(mode) {
+    if (mode === layoutMode) return;
+    layoutMode = mode;
+    updateLayoutToggle();
+    filterPosts();
+
+    // Persisting is best-effort; the choice already took effect above.
+    try {
+      const result = chrome.storage.local.set({ layoutMode: mode });
+      if (result && typeof result.catch === 'function') {
+        result.catch(() => {});
+      }
+    } catch (error) {
+      console.warn('[SubstackFront] Could not save layout preference:', error.message);
+    }
+  }
+
+  /**
+   * Mark every post as read
+   */
+  async function handleMarkAllRead() {
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'MARK_ALL_READ' });
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to mark all as read');
+      }
+
+      allPosts.forEach(post => { post.isRead = true; });
+      updateStats(allPosts);
+      filterPosts();
+
+      const marked = response.marked || 0;
+      showToast(
+        marked > 0 ? `Marked ${marked} post${marked === 1 ? '' : 's'} as read` : 'Everything is already read',
+        marked > 0 ? 'success' : 'info'
+      );
+    } catch (error) {
+      console.error('[SubstackFront] Error marking all as read:', error);
+      showToast('Mark all read failed: ' + error.message, 'error');
     }
   }
 
@@ -256,17 +478,10 @@
    * Refresh feed in background
    */
   async function handleRefresh() {
-    // Disable button and show loading state
+    // Spin the icon in place - swapping in a longer "Refreshing..." label used
+    // to resize the button and jolt the whole header bar.
     refreshBtnEl.disabled = true;
     refreshBtnEl.classList.add('loading');
-    const originalText = refreshBtnEl.innerHTML;
-    refreshBtnEl.innerHTML = `
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M23 4v6h-6M1 20v-6h6"/>
-        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-      </svg>
-      Refreshing...
-    `;
 
     try {
       const response = await chrome.runtime.sendMessage({ type: 'REFRESH_FEED' });
@@ -288,10 +503,8 @@
       console.error('[SubstackFront] Refresh error:', error);
       showToast('Refresh failed: ' + error.message, 'error');
     } finally {
-      // Restore button
       refreshBtnEl.disabled = false;
       refreshBtnEl.classList.remove('loading');
-      refreshBtnEl.innerHTML = originalText;
     }
   }
 
@@ -335,6 +548,23 @@
     filterPosts();
   });
 
+  searchInputEl.addEventListener('input', (e) => {
+    searchQuery = e.target.value;
+    filterPosts();
+  });
+
+  unreadOnlyEl.addEventListener('change', (e) => {
+    unreadOnly = e.target.checked;
+    filterPosts();
+  });
+
+  markAllReadBtnEl.addEventListener('click', handleMarkAllRead);
+
+  layoutToggleEl.addEventListener('click', (e) => {
+    const button = e.target.closest('button[data-layout]');
+    if (button) setLayoutMode(button.dataset.layout);
+  });
+
   if (isIOS()) {
     replaceRefreshWithInboxLink();
   } else {
@@ -351,7 +581,7 @@
     }
   });
 
-  // Initialize
-  loadPosts();
+  // Initialize - layout preference first, so the first paint uses it
+  loadLayoutMode().then(() => loadPosts(true));
 
 })();

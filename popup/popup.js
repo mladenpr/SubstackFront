@@ -19,6 +19,10 @@
   const toastEl = document.getElementById('toast');
   const toastMessageEl = toastEl.querySelector('.toast-message');
 
+  // Auto-refresh when the cache is older than this. Kept in sync with the copy
+  // in newtab/newtab.js - tests/platform.test.js fails if the two drift apart.
+  const STALE_REFRESH_THRESHOLD_MS = 60 * 60 * 1000;
+
   // State
   let allPosts = [];
   let toastTimeout = null;
@@ -112,7 +116,7 @@
         </div>
         <h2 class="post-title">${escapeHtml(post.title)}</h2>
         <div class="post-meta">
-          <span class="post-date">${formatRelativeDate(post.publishedAt)}</span>
+          <span class="post-date">${formatRelativeDate(post.publishedAt)}${post.readTime ? ` &middot; ${escapeHtml(post.readTime)}` : ''}</span>
           ${!post.isRead ? '<span class="unread-dot" title="Unread"></span>' : ''}
         </div>
       </div>
@@ -159,8 +163,11 @@
 
   /**
    * Load posts from storage
+   * @param {boolean} autoRefreshIfStale - Kick off a refresh when the cache is
+   *   old. Only the initial load passes true; a refresh reloads through here
+   *   and must not trigger itself again.
    */
-  async function loadPosts() {
+  async function loadPosts(autoRefreshIfStale = false) {
     try {
       const response = await chrome.runtime.sendMessage({ type: 'GET_POSTS' });
 
@@ -169,6 +176,10 @@
         loadingEl.classList.add('hidden');
         updateStats(allPosts);
         renderPosts(allPosts);
+
+        if (autoRefreshIfStale) {
+          maybeAutoRefresh(response.lastUpdated);
+        }
       } else {
         throw new Error(response.error || 'Failed to load posts');
       }
@@ -177,6 +188,23 @@
       loadingEl.classList.add('hidden');
       emptyStateEl.classList.remove('hidden');
     }
+  }
+
+  /**
+   * Refresh automatically when the cache has gone stale. Kept in sync with the
+   * copy in newtab/newtab.js - tests/platform.test.js fails if the two drift
+   * apart.
+   */
+  function maybeAutoRefresh(lastUpdated) {
+    // iOS swaps the Refresh button for an inbox link - no background refresh.
+    if (isIOS()) return;
+    // Never refreshed at all: the empty state already points at the inbox, and
+    // opening a Substack tab before first use would be a surprise.
+    if (!lastUpdated) return;
+    const age = Date.now() - new Date(lastUpdated).getTime();
+    if (Number.isNaN(age) || age < STALE_REFRESH_THRESHOLD_MS) return;
+    console.log('[SubstackFront] Cached posts are stale, refreshing...');
+    handleRefresh();
   }
 
   /**
@@ -285,6 +313,6 @@
   });
 
   // Initialize posts
-  loadPosts();
+  loadPosts(true);
 
 })();
