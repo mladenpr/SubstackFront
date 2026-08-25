@@ -1,21 +1,32 @@
-/* SubstackFront - Magazine Style */
+/* SubstackFront - Magazine Style
+ *
+ * Palette: warm paper + Substack orange (#ff6719). The pure orange is loud, so
+ * it is reserved for marks - the masthead rule, unread dots, active states,
+ * hover borders. Where orange must be *read* (kickers, links) the darker
+ * --color-accent-ink keeps small text legible on the paper background.
+ */
 
 :root {
-  --color-bg: #f4f1e8;
-  --color-surface: #fffef8;
-  --color-text: #1a1612;
-  --color-text-secondary: #4a443a;
-  --color-text-muted: #7a7060;
-  --color-accent: #8b0000;
-  --color-border: #c4b8a0;
-  --color-border-dark: #8a7e66;
+  --color-bg: #f7f3ec;
+  --color-surface: #fffdf8;
+  --color-text: #1c1712;
+  --color-text-secondary: #4f4738;
+  --color-text-muted: #857a66;
+  --color-accent: #ff6719;
+  --color-accent-ink: #b84a0a;
+  --color-accent-soft: #ffede2;
+  --color-border: #ddd3c1;
+  --color-border-dark: #a89a80;
+  --color-error: #a02c1d;
+  --color-success: #2d5a27;
 
   --font-main: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-display: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-display: Georgia, "Iowan Old Style", "Times New Roman", serif;
 
   --card-width: 200px;
   --card-height: 240px;
   --gap: 10px;
+  --control-height: 30px;
 }
 
 *, *::before, *::after {
@@ -39,15 +50,18 @@ body {
   flex-direction: column;
 }
 
-/* Header */
+/* Header - masthead with the brand rule on top. Every control shares
+   --control-height so nothing that happens inside the bar can change it. */
 .header {
   background: var(--color-surface);
-  border-bottom: 2px solid var(--color-border-dark);
+  border-top: 3px solid var(--color-accent);
+  border-bottom: 1px solid var(--color-border-dark);
   flex-shrink: 0;
 }
 
 .header-content {
-  padding: 10px 20px;
+  padding: 9px 20px;
+  min-height: calc(var(--control-height) + 18px);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -55,18 +69,27 @@ body {
 
 .logo {
   font-family: var(--font-display);
-  font-size: 1.1rem;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
   color: var(--color-text);
+}
+
+/* The full stop is the wordmark's only flourish */
+.logo::after {
+  content: '.';
+  color: var(--color-accent);
 }
 
 .header-actions {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
 }
 
 .filter-select {
-  padding: 5px 10px;
+  height: var(--control-height);
+  padding: 0 8px;
   border: 1px solid var(--color-border-dark);
   background: var(--color-surface);
   font-family: var(--font-main);
@@ -76,11 +99,13 @@ body {
 }
 
 .filter-select:focus {
-  outline: 1px solid var(--color-accent);
+  outline: 2px solid var(--color-accent);
+  outline-offset: -1px;
 }
 
 .search-input {
-  padding: 5px 10px;
+  height: var(--control-height);
+  padding: 0 10px;
   border: 1px solid var(--color-border-dark);
   background: var(--color-surface);
   font-family: var(--font-main);
@@ -90,13 +115,15 @@ body {
 }
 
 .search-input:focus {
-  outline: 1px solid var(--color-accent);
+  outline: 2px solid var(--color-accent);
+  outline-offset: -1px;
 }
 
 .unread-toggle {
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  height: var(--control-height);
   font-family: var(--font-main);
   font-size: 0.75rem;
   color: var(--color-text);
@@ -109,23 +136,68 @@ body {
   cursor: pointer;
 }
 
+/* Layout toggle - magazine mosaic vs uniform grid */
+.layout-toggle {
+  display: inline-flex;
+  height: var(--control-height);
+  border: 1px solid var(--color-border-dark);
+}
+
+.layout-toggle button {
+  width: 32px;
+  border: none;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s, color 0.12s;
+}
+
+.layout-toggle button + button {
+  border-left: 1px solid var(--color-border-dark);
+}
+
+.layout-toggle button:hover {
+  background: var(--color-accent-soft);
+  color: var(--color-accent-ink);
+}
+
+.layout-toggle button.active {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+.layout-toggle button:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
 .btn {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 5px 10px;
+  height: var(--control-height);
+  padding: 0 10px;
   border: 1px solid var(--color-border-dark);
   background: var(--color-surface);
   font-family: var(--font-main);
   font-size: 0.75rem;
   color: var(--color-text);
   cursor: pointer;
-  transition: background 0.12s;
+  transition: background 0.12s, border-color 0.12s;
   white-space: nowrap;
 }
 
 .btn:hover {
-  background: var(--color-bg);
+  background: var(--color-accent-soft);
+  border-color: var(--color-accent);
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -1px;
 }
 
 .btn:disabled {
@@ -154,7 +226,7 @@ a.btn {
 /* Main Content */
 .main {
   flex: none;
-  padding: 12px;
+  padding: 14px;
   overflow: visible;
   min-height: auto;
 }
@@ -197,7 +269,8 @@ a.btn {
 
 .empty-icon {
   margin-bottom: 16px;
-  opacity: 0.4;
+  color: var(--color-accent);
+  opacity: 0.6;
 }
 
 .empty-icon svg {
@@ -207,7 +280,7 @@ a.btn {
 
 .empty-state h2 {
   font-family: var(--font-display);
-  font-size: 1rem;
+  font-size: 1.05rem;
   margin-bottom: 6px;
   color: var(--color-text);
 }
@@ -217,8 +290,9 @@ a.btn {
 }
 
 .empty-state a {
-  color: var(--color-accent);
+  color: var(--color-accent-ink);
   text-decoration: underline;
+  text-decoration-color: var(--color-accent);
 }
 
 /* Post Grid */
@@ -231,6 +305,11 @@ a.btn {
   flex: none;
 }
 
+/* The magazine mosaic backfills the cells its spanned cards leave behind */
+.post-grid.magazine {
+  grid-auto-flow: dense;
+}
+
 /* Post Card - Fixed size */
 .post-card {
   background: var(--color-surface);
@@ -239,20 +318,21 @@ a.btn {
   cursor: pointer;
   display: flex;
   flex-direction: column;
-  transition: border-color 0.12s;
+  transition: border-color 0.12s, box-shadow 0.12s;
   height: var(--card-height);
 }
 
 .post-card:hover {
   border-color: var(--color-accent);
+  box-shadow: 0 2px 10px rgba(184, 74, 10, 0.14);
 }
 
 .post-card.read {
-  opacity: 0.5;
+  opacity: 0.55;
 }
 
 .post-card.read:hover {
-  opacity: 0.8;
+  opacity: 0.85;
 }
 
 /* Card Image - Fixed height */
@@ -263,20 +343,19 @@ a.btn {
   object-fit: cover;
   background: var(--color-bg);
   border-bottom: 1px solid var(--color-border);
-  filter: grayscale(20%) sepia(10%);
 }
 
 .post-image-placeholder {
   width: 100%;
   height: 120px;
   flex-shrink: 0;
-  background: var(--color-bg);
+  background: var(--color-accent-soft);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--color-text-muted);
+  color: var(--color-accent-ink);
   font-family: var(--font-display);
-  font-size: 1.2rem;
+  font-size: 1.4rem;
   border-bottom: 1px solid var(--color-border);
 }
 
@@ -304,10 +383,14 @@ a.btn {
   flex-shrink: 0;
 }
 
+/* Kicker - the small-caps section label above each headline */
 .publication-name {
   font-family: var(--font-main);
-  font-size: 0.6rem;
-  color: var(--color-accent);
+  font-size: 0.58rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-accent-ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -315,8 +398,8 @@ a.btn {
 
 .post-title {
   font-family: var(--font-display);
-  font-size: 0.8rem;
-  font-weight: 600;
+  font-size: 0.85rem;
+  font-weight: 700;
   line-height: 1.25;
   color: var(--color-text);
   display: -webkit-box;
@@ -328,7 +411,7 @@ a.btn {
 .post-subtitle {
   font-size: 0.7rem;
   color: var(--color-text-secondary);
-  line-height: 1.3;
+  line-height: 1.35;
   display: -webkit-box;
   -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
@@ -351,59 +434,79 @@ a.btn {
 }
 
 .unread-dot {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
   background: var(--color-accent);
   border-radius: 50%;
+  flex-shrink: 0;
 }
 
-/* Hero Card - full-width lead story */
-.post-card.hero {
-  grid-column: 1 / -1;
+/* Featured Card - 2x2 block leading each stretch of the mosaic. Kept to two
+   columns so ordinary cover images are never stretched past their quality. */
+.post-grid.magazine .post-card.featured {
+  grid-column: span 2;
   grid-row: span 2;
   height: calc(var(--card-height) * 2 + var(--gap));
+}
+
+.post-grid.magazine .post-card.featured .post-image,
+.post-grid.magazine .post-card.featured .post-image-placeholder {
+  height: 56%;
+}
+
+.post-grid.magazine .post-card.featured .post-image-placeholder {
+  font-size: 2.4rem;
+}
+
+.post-grid.magazine .post-card.featured .post-content {
+  padding: 12px 14px;
+  gap: 6px;
+}
+
+.post-grid.magazine .post-card.featured .publication-name {
+  font-size: 0.65rem;
+}
+
+.post-grid.magazine .post-card.featured .post-title {
+  font-size: 1.2rem;
+  -webkit-line-clamp: 3;
+}
+
+.post-grid.magazine .post-card.featured .post-subtitle {
+  font-size: 0.8rem;
+  -webkit-line-clamp: 3;
+}
+
+.post-grid.magazine .post-card.featured .post-meta {
+  font-size: 0.65rem;
+}
+
+/* Wide Card - 2x1, image beside the text */
+.post-grid.magazine .post-card.wide {
+  grid-column: span 2;
   flex-direction: row;
 }
 
-.post-card.hero .post-image,
-.post-card.hero .post-image-placeholder {
-  width: 55%;
+.post-grid.magazine .post-card.wide .post-image,
+.post-grid.magazine .post-card.wide .post-image-placeholder {
+  width: 42%;
   height: 100%;
   border-bottom: none;
   border-right: 1px solid var(--color-border);
 }
 
-.post-card.hero .post-image-placeholder {
-  font-size: 3rem;
+.post-grid.magazine .post-card.wide .post-content {
+  padding: 10px 12px;
+  gap: 5px;
 }
 
-.post-card.hero .post-content {
-  padding: 20px 24px;
-  gap: 10px;
-}
-
-.post-card.hero .publication-name {
-  font-size: 0.75rem;
-}
-
-.post-card.hero .publication-logo {
-  width: 18px;
-  height: 18px;
-}
-
-.post-card.hero .post-title {
-  font-size: 1.5rem;
+.post-grid.magazine .post-card.wide .post-title {
+  font-size: 1rem;
   -webkit-line-clamp: 3;
 }
 
-.post-card.hero .post-subtitle {
-  font-size: 0.9rem;
-  line-height: 1.45;
-  -webkit-line-clamp: 5;
-}
-
-.post-card.hero .post-meta {
-  font-size: 0.7rem;
+.post-grid.magazine .post-card.wide .post-subtitle {
+  -webkit-line-clamp: 2;
 }
 
 /* Footer */
@@ -435,7 +538,7 @@ a.btn {
   }
 
   .logo {
-    font-size: 0.9rem;
+    font-size: 1rem;
   }
 
   .main {
@@ -445,31 +548,44 @@ a.btn {
   .search-input {
     width: 120px;
   }
+}
 
-  /* Narrow screens: stack the hero vertically instead of side by side */
-  .post-card.hero {
+/* Very narrow screens cannot afford spanned cards - drop to a uniform grid */
+@media (max-width: 480px) {
+  .post-grid.magazine .post-card.featured,
+  .post-grid.magazine .post-card.wide {
+    grid-column: auto;
+    grid-row: auto;
+    height: var(--card-height);
     flex-direction: column;
   }
 
-  .post-card.hero .post-image,
-  .post-card.hero .post-image-placeholder {
+  .post-grid.magazine .post-card.featured .post-image,
+  .post-grid.magazine .post-card.featured .post-image-placeholder,
+  .post-grid.magazine .post-card.wide .post-image,
+  .post-grid.magazine .post-card.wide .post-image-placeholder {
     width: 100%;
-    height: 50%;
+    height: 120px;
     border-right: none;
     border-bottom: 1px solid var(--color-border);
   }
 
-  .post-card.hero .post-content {
-    padding: 12px 14px;
-    gap: 6px;
+  .post-grid.magazine .post-card.featured .post-content,
+  .post-grid.magazine .post-card.wide .post-content {
+    padding: 8px 10px;
+    gap: 4px;
   }
 
-  .post-card.hero .post-title {
-    font-size: 1.1rem;
+  .post-grid.magazine .post-card.featured .post-title,
+  .post-grid.magazine .post-card.wide .post-title {
+    font-size: 0.85rem;
+    -webkit-line-clamp: 2;
   }
 
-  .post-card.hero .post-subtitle {
-    -webkit-line-clamp: 3;
+  .post-grid.magazine .post-card.featured .post-subtitle,
+  .post-grid.magazine .post-card.wide .post-subtitle {
+    font-size: 0.7rem;
+    -webkit-line-clamp: 1;
   }
 }
 
@@ -496,11 +612,11 @@ a.btn {
 }
 
 .toast.toast-error {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
+  background: var(--color-error);
+  border-color: var(--color-error);
 }
 
 .toast.toast-success {
-  background: #2d5a27;
-  border-color: #2d5a27;
+  background: var(--color-success);
+  border-color: var(--color-success);
 }

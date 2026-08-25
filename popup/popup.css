@@ -2,17 +2,21 @@
 
 :root {
   /* Same color scheme as newtab */
-  --color-bg: #f4f1e8;
-  --color-surface: #fffef8;
-  --color-text: #1a1612;
-  --color-text-secondary: #4a443a;
-  --color-text-muted: #7a7060;
-  --color-accent: #8b0000;
-  --color-border: #c4b8a0;
-  --color-border-dark: #8a7e66;
+  --color-bg: #f7f3ec;
+  --color-surface: #fffdf8;
+  --color-text: #1c1712;
+  --color-text-secondary: #4f4738;
+  --color-text-muted: #857a66;
+  --color-accent: #ff6719;
+  --color-accent-ink: #b84a0a;
+  --color-accent-soft: #ffede2;
+  --color-border: #ddd3c1;
+  --color-border-dark: #a89a80;
+  --color-error: #a02c1d;
+  --color-success: #2d5a27;
 
   --font-main: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-display: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-display: Georgia, "Iowan Old Style", "Times New Roman", serif;
 
   /* Compact dimensions for popup */
   --card-width: 220px;
@@ -41,10 +45,11 @@ body {
   flex-direction: column;
 }
 
-/* Compact Header */
+/* Compact Header - masthead with the brand rule on top */
 .header {
   background: var(--color-surface);
-  border-bottom: 2px solid var(--color-border-dark);
+  border-top: 3px solid var(--color-accent);
+  border-bottom: 1px solid var(--color-border-dark);
   flex-shrink: 0;
 }
 
@@ -57,8 +62,15 @@ body {
 
 .logo {
   font-family: var(--font-display);
-  font-size: 0.9rem;
+  font-size: 0.95rem;
+  font-weight: 700;
   color: var(--color-text);
+}
+
+/* The full stop is the wordmark's only flourish */
+.logo::after {
+  content: '.';
+  color: var(--color-accent);
 }
 
 .header-actions {
@@ -87,7 +99,8 @@ body {
 }
 
 .btn-icon:hover {
-  background: var(--color-bg);
+  background: var(--color-accent-soft);
+  border-color: var(--color-accent);
 }
 
 .btn-icon:disabled {
@@ -121,7 +134,8 @@ body {
 }
 
 .btn-text:hover {
-  background: var(--color-bg);
+  background: var(--color-accent-soft);
+  border-color: var(--color-accent);
 }
 
 .btn-text svg {
@@ -228,18 +242,17 @@ a.btn-text {
   object-fit: cover;
   background: var(--color-bg);
   border-bottom: 1px solid var(--color-border);
-  filter: grayscale(20%) sepia(10%);
 }
 
 .post-image-placeholder {
   width: 100%;
   height: var(--image-height);
   flex-shrink: 0;
-  background: var(--color-bg);
+  background: var(--color-accent-soft);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--color-text-muted);
+  color: var(--color-accent-ink);
   font-family: var(--font-display);
   font-size: 1rem;
   border-bottom: 1px solid var(--color-border);
@@ -269,9 +282,13 @@ a.btn-text {
   flex-shrink: 0;
 }
 
+/* Kicker - the small-caps section label above each headline */
 .publication-name {
-  font-size: 0.55rem;
-  color: var(--color-accent);
+  font-size: 0.52rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-accent-ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -279,9 +296,9 @@ a.btn-text {
 
 .post-title {
   font-family: var(--font-display);
-  font-size: 0.7rem;
-  font-weight: 600;
-  line-height: 1.2;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.25;
   color: var(--color-text);
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -301,10 +318,11 @@ a.btn-text {
 }
 
 .unread-dot {
-  width: 4px;
-  height: 4px;
+  width: 5px;
+  height: 5px;
   background: var(--color-accent);
   border-radius: 50%;
+  flex-shrink: 0;
 }
 
 /* Toggle Switch - compact version for popup */
@@ -393,11 +411,11 @@ a.btn-text {
 }
 
 .toast.toast-error {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
+  background: var(--color-error);
+  border-color: var(--color-error);
 }
 
 .toast.toast-success {
-  background: #2d5a27;
-  border-color: #2d5a27;
+  background: var(--color-success);
+  border-color: var(--color-success);
 }

@@ -171,7 +171,10 @@ async function updateBadge() {
     const unread = posts.filter(post => !post.isRead).length;
 
     if (typeof action.setBadgeBackgroundColor === 'function') {
-      await action.setBadgeBackgroundColor({ color: '#8b0000' });
+      await action.setBadgeBackgroundColor({ color: '#ff6719' }); // Substack orange
+    }
+    if (typeof action.setBadgeTextColor === 'function') {
+      await action.setBadgeTextColor({ color: '#ffffff' });
     }
     await action.setBadgeText({ text: unread > 0 ? String(unread) : '' });
   } catch (error) {

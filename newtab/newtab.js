@@ -15,6 +15,7 @@
   const noResultsEl = document.getElementById('no-results');
   const postGridEl = document.getElementById('post-grid');
   const publicationFilterEl = document.getElementById('publication-filter');
+  const layoutToggleEl = document.getElementById('layout-toggle');
   const searchInputEl = document.getElementById('search-input');
   const unreadOnlyEl = document.getElementById('unread-only');
   const markAllReadBtnEl = document.getElementById('mark-all-read-btn');
@@ -32,6 +33,7 @@
   let currentFilter = '';
   let searchQuery = '';
   let unreadOnly = false;
+  let layoutMode = 'magazine'; // 'magazine' (mixed card sizes) or 'grid' (uniform)
   let toastTimeout = null;
 
   /**
@@ -99,11 +101,12 @@
   /**
    * Create post card HTML
    * @param {object} post
-   * @param {boolean} isHero - Render as the full-width lead story
+   * @param {string} variant - '' for a standard card, 'featured' (2x2) or
+   *   'wide' (2x1) in the magazine layout
    */
-  function createPostCard(post, isHero = false) {
+  function createPostCard(post, variant = '') {
     const card = document.createElement('article');
-    card.className = `post-card${post.isRead ? ' read' : ''}${isHero ? ' hero' : ''}`;
+    card.className = `post-card${post.isRead ? ' read' : ''}${variant ? ` ${variant}` : ''}`;
     card.dataset.url = post.url;
 
     const imageHtml = post.coverImage
@@ -150,10 +153,28 @@
   }
 
   /**
-   * Render posts to grid, leading with a full-width hero card
+   * Card size for a position in the magazine layout. A featured card leads
+   * each block of eleven with a wide card mid-block; sizes stay moderate so
+   * low-resolution cover images are never blown up to full width.
+   * grid-auto-flow: dense backfills the cells the spans leave behind.
+   *
+   * Posts without a cover image stay standard size - a blown-up placeholder
+   * looks worse than a small one - and big slots are skipped near the end of
+   * the list, where too few cards remain to fill in around them.
+   */
+  function magazineVariant(post, index, total) {
+    if (!post.coverImage) return '';
+    if (index % 11 === 0 && total - index >= 5) return 'featured';
+    if (index % 11 === 5 && total - index >= 2) return 'wide';
+    return '';
+  }
+
+  /**
+   * Render posts as a mixed-size magazine mosaic or a uniform grid
    */
   function renderPosts(posts) {
     postGridEl.innerHTML = '';
+    postGridEl.classList.toggle('magazine', layoutMode === 'magazine');
 
     if (posts.length === 0) {
       postGridEl.classList.add('hidden');
@@ -172,12 +193,9 @@
     noResultsEl.classList.add('hidden');
     postGridEl.classList.remove('hidden');
 
-    // Lead story: the newest unread post, or the newest post when all are read.
-    const heroPost = posts.find(post => !post.isRead) || posts[0];
-
-    [heroPost, ...posts.filter(post => post !== heroPost)].forEach((post) => {
-      const card = createPostCard(post, post === heroPost);
-      postGridEl.appendChild(card);
+    posts.forEach((post, index) => {
+      const variant = layoutMode === 'magazine' ? magazineVariant(post, index, posts.length) : '';
+      postGridEl.appendChild(createPostCard(post, variant));
     });
   }
 
@@ -282,6 +300,45 @@
     if (Number.isNaN(age) || age < STALE_REFRESH_THRESHOLD_MS) return;
     console.log('[SubstackFront] Cached posts are stale, refreshing...');
     handleRefresh();
+  }
+
+  /**
+   * Load the saved layout preference. Defaults to magazine when unset or when
+   * storage is unavailable.
+   */
+  async function loadLayoutMode() {
+    try {
+      const result = await chrome.storage.local.get(['layoutMode']);
+      if (result.layoutMode === 'grid' || result.layoutMode === 'magazine') {
+        layoutMode = result.layoutMode;
+      }
+    } catch (error) {
+      console.warn('[SubstackFront] Could not read layout preference:', error.message);
+    }
+    updateLayoutToggle();
+  }
+
+  function updateLayoutToggle() {
+    layoutToggleEl.querySelectorAll('button').forEach(button => {
+      button.classList.toggle('active', button.dataset.layout === layoutMode);
+    });
+  }
+
+  function setLayoutMode(mode) {
+    if (mode === layoutMode) return;
+    layoutMode = mode;
+    updateLayoutToggle();
+    filterPosts();
+
+    // Persisting is best-effort; the choice already took effect above.
+    try {
+      const result = chrome.storage.local.set({ layoutMode: mode });
+      if (result && typeof result.catch === 'function') {
+        result.catch(() => {});
+      }
+    } catch (error) {
+      console.warn('[SubstackFront] Could not save layout preference:', error.message);
+    }
   }
 
   /**
@@ -422,6 +479,11 @@
 
   markAllReadBtnEl.addEventListener('click', handleMarkAllRead);
 
+  layoutToggleEl.addEventListener('click', (e) => {
+    const button = e.target.closest('button[data-layout]');
+    if (button) setLayoutMode(button.dataset.layout);
+  });
+
   if (isIOS()) {
     replaceRefreshWithInboxLink();
   } else {
@@ -438,7 +500,7 @@
     }
   });
 
-  // Initialize
-  loadPosts(true);
+  // Initialize - layout preference first, so the first paint uses it
+  loadLayoutMode().then(() => loadPosts(true));
 
 })();

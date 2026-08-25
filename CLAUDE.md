@@ -35,9 +35,10 @@ SubstackFront/
 - **Content Script**: Parses Substack feed pages to extract post data (title, image, URL, etc.)
 - **Background Worker**: Receives posts from content script, deduplicates, stores in chrome.storage.local
 - **Popup**: Compact grid of cached posts, plus Refresh and a link to the tab view
-- **Tab View** (`newtab/`): Reads from storage; a full-width hero card leads (newest
-  unread post), the rest tile below. Filter by publication, search, unread-only
-  toggle, and Mark all read
+- **Tab View** (`newtab/`): Reads from storage; two layouts, persisted as
+  `layoutMode` in chrome.storage.local — a magazine mosaic (featured 2x2 and
+  wide 2x1 cards mixed into the grid) and a uniform grid. Filter by
+  publication, search, unread-only toggle, and Mark all read
 - Both UIs auto-refresh on open when the cache is older than an hour (never on
   iOS), and the background worker keeps the unread count on the toolbar badge
   (feature-detected `chrome.action`)
