@@ -310,6 +310,125 @@ a.btn {
   grid-auto-flow: dense;
 }
 
+/* By-publication layout - alphabetical sections of compact rows */
+.post-grid.grouped {
+  display: block;
+  max-width: 860px;
+  margin: 0 auto;
+}
+
+.pub-group {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-top: 2px solid var(--color-accent);
+  margin-bottom: 16px;
+}
+
+.pub-group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.pub-group-logo {
+  width: 18px;
+  height: 18px;
+  object-fit: cover;
+  border: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.pub-group-name {
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pub-group-count {
+  margin-left: auto;
+  font-size: 0.65rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.post-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.post-row + .post-row {
+  border-top: 1px dotted var(--color-border);
+}
+
+.post-row:hover {
+  background: var(--color-accent-soft);
+}
+
+.post-row.read {
+  opacity: 0.55;
+}
+
+.post-row.read:hover {
+  opacity: 0.85;
+}
+
+.post-row-thumb {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  object-fit: cover;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+}
+
+.post-row-thumb-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-accent-soft);
+  color: var(--color-accent-ink);
+  font-family: var(--font-display);
+  font-size: 1rem;
+}
+
+.post-row-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.post-row-title {
+  font-family: var(--font-display);
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.post-row-meta {
+  font-size: 0.62rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* Post Card - Fixed size */
 .post-card {
   background: var(--color-surface);

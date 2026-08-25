@@ -33,7 +33,9 @@
   let currentFilter = '';
   let searchQuery = '';
   let unreadOnly = false;
-  let layoutMode = 'magazine'; // 'magazine' (mixed card sizes) or 'grid' (uniform)
+  // 'magazine' (mixed card sizes), 'grid' (uniform), or 'publications'
+  // (alphabetical groups of compact rows)
+  let layoutMode = 'magazine';
   let toastTimeout = null;
 
   /**
@@ -170,11 +172,85 @@
   }
 
   /**
-   * Render posts as a mixed-size magazine mosaic or a uniform grid
+   * Compact row for the by-publication layout: small thumbnail, one-line
+   * title, meta. Shares .read/.unread-dot/data-url with the cards so
+   * markAsRead() updates rows the same way.
+   */
+  function createPostRow(post) {
+    const row = document.createElement('article');
+    row.className = `post-row${post.isRead ? ' read' : ''}`;
+    row.dataset.url = post.url;
+
+    const thumbHtml = post.coverImage
+      ? `<img class="post-row-thumb" src="${post.coverImage}" alt="" loading="lazy">`
+      : `<div class="post-row-thumb post-row-thumb-placeholder">${getInitial(post.publication)}</div>`;
+
+    const metaParts = [formatRelativeDate(post.publishedAt), post.readTime, post.author]
+      .filter(Boolean)
+      .map(escapeHtml)
+      .join(' &middot; ');
+
+    row.innerHTML = `
+      ${thumbHtml}
+      <div class="post-row-body">
+        <h3 class="post-row-title">${escapeHtml(post.title)}</h3>
+        <div class="post-row-meta">${metaParts}</div>
+      </div>
+      ${!post.isRead ? '<span class="unread-dot" title="Unread"></span>' : ''}
+    `;
+
+    row.addEventListener('click', () => {
+      markAsRead(post.url);
+      window.open(post.url, '_blank');
+    });
+
+    return row;
+  }
+
+  /**
+   * Render posts grouped under their publication, publications in
+   * alphabetical order, posts newest first within each group
+   */
+  function renderGroupedPosts(posts) {
+    const groups = new Map();
+    posts.forEach(post => {
+      if (!groups.has(post.publication)) groups.set(post.publication, []);
+      groups.get(post.publication).push(post);
+    });
+
+    const names = [...groups.keys()]
+      .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+
+    names.forEach(name => {
+      const groupPosts = groups.get(name);
+      const unread = groupPosts.filter(p => !p.isRead).length;
+      const logo = groupPosts.find(p => p.publicationLogo)?.publicationLogo;
+
+      const section = document.createElement('section');
+      section.className = 'pub-group';
+
+      const header = document.createElement('header');
+      header.className = 'pub-group-header';
+      header.innerHTML = `
+        ${logo ? `<img class="pub-group-logo" src="${logo}" alt="">` : ''}
+        <h2 class="pub-group-name">${escapeHtml(name)}</h2>
+        <span class="pub-group-count">${groupPosts.length} post${groupPosts.length === 1 ? '' : 's'}${unread > 0 ? ` &middot; ${unread} unread` : ''}</span>
+      `;
+      section.appendChild(header);
+
+      groupPosts.forEach(post => section.appendChild(createPostRow(post)));
+      postGridEl.appendChild(section);
+    });
+  }
+
+  /**
+   * Render posts as a mixed-size magazine mosaic, a uniform grid, or
+   * publication groups
    */
   function renderPosts(posts) {
     postGridEl.innerHTML = '';
     postGridEl.classList.toggle('magazine', layoutMode === 'magazine');
+    postGridEl.classList.toggle('grouped', layoutMode === 'publications');
 
     if (posts.length === 0) {
       postGridEl.classList.add('hidden');
@@ -192,6 +268,11 @@
     emptyStateEl.classList.add('hidden');
     noResultsEl.classList.add('hidden');
     postGridEl.classList.remove('hidden');
+
+    if (layoutMode === 'publications') {
+      renderGroupedPosts(posts);
+      return;
+    }
 
     posts.forEach((post, index) => {
       const variant = layoutMode === 'magazine' ? magazineVariant(post, index, posts.length) : '';
@@ -309,7 +390,7 @@
   async function loadLayoutMode() {
     try {
       const result = await chrome.storage.local.get(['layoutMode']);
-      if (result.layoutMode === 'grid' || result.layoutMode === 'magazine') {
+      if (['magazine', 'grid', 'publications'].includes(result.layoutMode)) {
         layoutMode = result.layoutMode;
       }
     } catch (error) {
