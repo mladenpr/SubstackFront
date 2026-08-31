@@ -54,13 +54,21 @@ function createChromeStub(options = {}) {
     failGetAll = false,
     initialStore = {},
     onTabMessage = null,
-    action = false
+    action = false,
+    windows = false,
+    windowsCreateFails = false,
+    windowsCreateOmitsTabs = false
   } = options;
 
   const store = { ...initialStore };
-  const calls = { tabsCreated: [], tabsRemoved: [], tabMessages: [], badgeTexts: [], badgeColors: [] };
+  const calls = {
+    tabsCreated: [], tabsRemoved: [], tabMessages: [],
+    windowsCreated: [], windowsRemoved: [],
+    badgeTexts: [], badgeColors: []
+  };
   const listeners = { message: [], installed: [], tabUpdated: [] };
   let nextTabId = 100;
+  let nextWindowId = 900;
 
   const local = {
     async get(keys) {
@@ -126,6 +134,28 @@ function createChromeStub(options = {}) {
     }
   };
 
+  // The windows API. Absent by default - iOS Safari has none, and that shape
+  // must keep exercising the tabs.create fallback. Pass { windows: true } for
+  // the Chrome/macOS shape, { windowsCreateFails: true } for a browser that
+  // rejects the minimized state, and { windowsCreateOmitsTabs: true } for one
+  // that resolves without populating the created window's tabs.
+  if (windows) {
+    chrome.windows = {
+      async create(createData) {
+        if (windowsCreateFails) throw new Error('minimized state not supported');
+        const win = { id: nextWindowId++, ...createData };
+        if (!windowsCreateOmitsTabs) {
+          win.tabs = [{ id: nextTabId++, url: createData.url }];
+        }
+        calls.windowsCreated.push(win);
+        return win;
+      },
+      async remove(windowId) {
+        calls.windowsRemoved.push(windowId);
+      }
+    };
+  }
+
   // The badge API. Absent by default so every test exercises the
   // feature-detect guard; pass { action: true } to record badge calls.
   if (action) {
@@ -144,6 +174,9 @@ function createChromeStub(options = {}) {
  * @param {object} options
  * @param {boolean} options.getBytesInUse - expose storage.local.getBytesInUse (Chrome shape)
  * @param {boolean} options.action        - expose chrome.action and record badge calls
+ * @param {boolean} options.windows       - expose chrome.windows and record window calls
+ * @param {boolean} options.windowsCreateFails     - make windows.create reject
+ * @param {boolean} options.windowsCreateOmitsTabs - windows.create resolves without tabs
  * @param {boolean} options.failGetAll    - make storage.local.get(null) throw
  * @param {object}  options.initialStore   - seed chrome.storage.local
  * @param {Function} options.onTabMessage  - handle tabs.sendMessage; throws by default

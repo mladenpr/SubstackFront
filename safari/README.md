@@ -199,8 +199,10 @@ It now returns `false` because it always answers synchronously.
 `./safari/build.sh` generates an iOS target too, and the UI is responsive, but
 background refresh cannot work there:
 
-- `tabs.create({ active: false })` is broken on iOS 18.3+ — the new tab is
-  foregrounded regardless, so a refresh visibly yanks the user to
+- iOS has no `windows` API, so the minimized-window refresh the other
+  platforms use falls back to `tabs.create({ active: false })` there.
+- `tabs.create({ active: false })` is itself broken on iOS 18.3+ — the new tab
+  is foregrounded regardless, so a refresh visibly yanks the user to
   `substack.com/inbox`.
 - Opening that tab dismisses the popup, so the popup never sees the result.
 
