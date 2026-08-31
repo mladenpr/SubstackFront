@@ -227,7 +227,7 @@ test('answers unknown message types instead of hanging', async () => {
   assert.deepEqual(plain(response), { success: false, error: 'Unknown message type' });
 });
 
-test('refresh opens a background tab and settles when the content script reports', async () => {
+test('refresh opens a background tab where windows.create is unavailable (iOS)', async () => {
   const ext = loadBackground();
   const pending = ext.sendMessage({ type: 'REFRESH_FEED' });
   await tick();
@@ -243,6 +243,59 @@ test('refresh opens a background tab and settles when the content script reports
   assert.equal(response.success, true);
   assert.equal(response.added, 1);
   assert.ok(ext.calls.tabsRemoved.includes(tabId), 'refresh tab should be closed');
+});
+
+test('refresh opens the inbox in a minimized window when the browser supports it', async () => {
+  const ext = loadBackground({ windows: true });
+  const pending = ext.sendMessage({ type: 'REFRESH_FEED' });
+  await tick();
+
+  assert.equal(ext.calls.windowsCreated.length, 1);
+  assert.equal(ext.calls.windowsCreated[0].url, 'https://substack.com/inbox');
+  assert.equal(ext.calls.windowsCreated[0].state, 'minimized');
+  assert.equal(ext.calls.windowsCreated[0].focused, undefined,
+    'Chrome rejects focused combined with a minimized state');
+  assert.equal(ext.calls.tabsCreated.length, 0,
+    'nothing may appear in the user\'s tab strip');
+
+  const tabId = ext.calls.windowsCreated[0].tabs[0].id;
+  await ext.sendMessage({ type: 'POSTS_EXTRACTED', posts: [makePost(1)] }, { tab: { id: tabId } });
+
+  const response = await pending;
+  assert.equal(response.success, true);
+  assert.equal(response.added, 1);
+  assert.ok(ext.calls.tabsRemoved.includes(tabId),
+    'closing the window\'s sole tab closes the minimized window with it');
+});
+
+test('refresh falls back to a background tab when windows.create fails', async () => {
+  // Safari rejects createData it does not support rather than ignoring it.
+  const ext = loadBackground({ windows: true, windowsCreateFails: true });
+  const pending = ext.sendMessage({ type: 'REFRESH_FEED' });
+  await tick();
+
+  assert.equal(ext.calls.tabsCreated.length, 1);
+  assert.equal(ext.calls.tabsCreated[0].active, false);
+
+  const tabId = ext.calls.tabsCreated[0].id;
+  await ext.sendMessage({ type: 'POSTS_EXTRACTED', posts: [makePost(1)] }, { tab: { id: tabId } });
+  assert.equal((await pending).success, true);
+});
+
+test('refresh closes the orphan window and falls back when windows.create returns no tab', async () => {
+  const ext = loadBackground({ windows: true, windowsCreateOmitsTabs: true });
+  const pending = ext.sendMessage({ type: 'REFRESH_FEED' });
+  await tick();
+
+  assert.equal(ext.calls.windowsCreated.length, 1);
+  assert.ok(ext.calls.windowsRemoved.includes(ext.calls.windowsCreated[0].id),
+    'a window whose tab cannot be addressed must not be left open');
+  assert.equal(ext.calls.tabsCreated.length, 1);
+  assert.equal(ext.calls.tabsCreated[0].active, false);
+
+  const tabId = ext.calls.tabsCreated[0].id;
+  await ext.sendMessage({ type: 'POSTS_EXTRACTED', posts: [] }, { tab: { id: tabId } });
+  assert.equal((await pending).success, true);
 });
 
 test('refresh triggers extraction when tabs.onUpdated reports complete', async () => {

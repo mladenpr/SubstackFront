@@ -40,6 +40,11 @@ SubstackFront/
   wide 2x1 cards mixed into the grid), a uniform grid, and alphabetical
   by-publication groups of compact rows. Filter by publication, search,
   unread-only toggle, and Mark all read
+- **Refresh**: the worker loads `substack.com/inbox` in a minimized window —
+  nothing appears in the user's tab strip and focus never moves — lets the
+  content script extract, then closes it. `windows.create` is feature-detected
+  and allowed to fail (iOS has no `windows` API), falling back to an inactive
+  tab in the current window
 - Both UIs auto-refresh on open when the cache is older than an hour (never on
   iOS), and the background worker keeps the unread count on the toolbar badge
   (feature-detected `chrome.action`)

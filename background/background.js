@@ -305,7 +305,8 @@ let pendingTabUpdateListener = null;
 let pendingRefreshTimers = [];
 
 /**
- * Close a tab, tolerating both promise- and callback-style tabs.remove
+ * Close a tab, tolerating both promise- and callback-style tabs.remove.
+ * When the tab is the sole tab of a refresh window, the window closes with it.
  */
 function closeTab(tabId) {
   try {
@@ -316,6 +317,56 @@ function closeTab(tabId) {
   } catch (error) {
     // Tab already gone
   }
+}
+
+/**
+ * Close a window, tolerating both promise- and callback-style windows.remove
+ */
+function closeWindow(windowId) {
+  try {
+    const result = chrome.windows.remove(windowId);
+    if (result && typeof result.catch === 'function') {
+      result.catch(() => {});
+    }
+  } catch (error) {
+    // Window already gone
+  }
+}
+
+/**
+ * Open the inbox for a refresh without disturbing what the user is looking at.
+ *
+ * Preferred: a minimized window, so no tab appears in the user's tab strip and
+ * focus never moves - the page still loads and runs the content script. The
+ * `windows` API is feature-detected (iOS Safari has none) and the call is
+ * allowed to fail (a browser may reject the minimized state), falling back to
+ * an inactive tab in the current window either way.
+ */
+async function openRefreshTab() {
+  const windowsApi = chrome.windows;
+  if (windowsApi && typeof windowsApi.create === 'function') {
+    try {
+      // Chrome rejects `focused` combined with a minimized state, so pass
+      // only the state - a minimized window is unfocused by definition.
+      const refreshWindow = await windowsApi.create({ url: REFRESH_URL, state: 'minimized' });
+      const tab = refreshWindow?.tabs?.[0];
+      if (tab && tab.id !== undefined) {
+        console.log('[SubstackFront] Opened refresh window:', refreshWindow.id);
+        return tab;
+      }
+      // The window exists but its tab cannot be addressed; close it rather
+      // than leak it, then fall back.
+      if (refreshWindow && refreshWindow.id !== undefined) {
+        closeWindow(refreshWindow.id);
+      }
+      console.log('[SubstackFront] windows.create returned no tab, falling back to a background tab');
+    } catch (error) {
+      console.log('[SubstackFront] Minimized window unavailable, falling back to a background tab:', error.message);
+    }
+  }
+
+  // On iOS 18.3+ Safari ignores `active: false` and foregrounds the tab anyway.
+  return chrome.tabs.create({ url: REFRESH_URL, active: false });
 }
 
 /**
@@ -374,7 +425,8 @@ function scheduleExtractionTrigger(tabId, delayMs, force = false) {
 }
 
 /**
- * Refresh feed by opening Substack in a background tab
+ * Refresh feed by loading Substack's inbox in a minimized window (or a
+ * background tab where that is unavailable) and extracting from it
  */
 async function refreshFeed() {
   console.log('[SubstackFront] Starting background refresh...');
@@ -390,15 +442,14 @@ async function refreshFeed() {
 
   let tab;
   try {
-    // On iOS 18.3+ Safari ignores `active: false` and foregrounds the tab anyway.
-    tab = await chrome.tabs.create({ url: REFRESH_URL, active: false });
+    tab = await openRefreshTab();
   } catch (error) {
-    console.error('[SubstackFront] Failed to create tab:', error);
+    console.error('[SubstackFront] Failed to open refresh tab:', error);
     throw new Error(`Could not open ${REFRESH_URL}: ${error.message}`);
   }
 
   pendingRefreshTabId = tab.id;
-  console.log('[SubstackFront] Created background tab:', tab.id);
+  console.log('[SubstackFront] Created refresh tab:', tab.id);
 
   return new Promise((resolve, reject) => {
     pendingRefreshResolve = resolve;
